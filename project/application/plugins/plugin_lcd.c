@@ -105,41 +105,41 @@ void plugin_lcd_address_set(uint16_t x1,uint16_t y1,uint16_t x2,uint16_t y2)
     if(USE_HORIZONTAL==0)
 	{
 		drv_lcd_write_reg(0x2a);//列地址设置
-		drv_lcd_write_halfword(x1+2);
-		drv_lcd_write_halfword(x2+2);
+		drv_lcd_write_halfword(x1);
+		drv_lcd_write_halfword(x2);
 		drv_lcd_write_reg(0x2b);//行地址设置
-		drv_lcd_write_halfword(y1+1);
-		drv_lcd_write_halfword(y2+1);
+		drv_lcd_write_halfword(y1);
+		drv_lcd_write_halfword(y2);
 		drv_lcd_write_reg(0x2c);//储存器写
 	}
 	else if(USE_HORIZONTAL==1)
 	{
 		drv_lcd_write_reg(0x2a);//列地址设置
-		drv_lcd_write_halfword(x1+2);
-		drv_lcd_write_halfword(x2+2);
+		drv_lcd_write_halfword(x1);
+		drv_lcd_write_halfword(x2);
 		drv_lcd_write_reg(0x2b);//行地址设置
-		drv_lcd_write_halfword(y1+1);
-		drv_lcd_write_halfword(y2+1);
+		drv_lcd_write_halfword(y1);
+		drv_lcd_write_halfword(y2);
 		drv_lcd_write_reg(0x2c);//储存器写
 	}
 	else if(USE_HORIZONTAL==2)
 	{
 		drv_lcd_write_reg(0x2a);//列地址设置
-		drv_lcd_write_halfword(x1+1);
-		drv_lcd_write_halfword(x2+1);
+		drv_lcd_write_halfword(x1);
+		drv_lcd_write_halfword(x2);
 		drv_lcd_write_reg(0x2b);//行地址设置
-		drv_lcd_write_halfword(y1+2);
-		drv_lcd_write_halfword(y2+2);
+		drv_lcd_write_halfword(y1);
+		drv_lcd_write_halfword(y2);
 		drv_lcd_write_reg(0x2c);//储存器写
 	}
 	else
 	{
 		drv_lcd_write_reg(0x2a);//列地址设置
-		drv_lcd_write_halfword(x1+1);
-		drv_lcd_write_halfword(x2+1);
+		drv_lcd_write_halfword(x1);
+		drv_lcd_write_halfword(x2);
 		drv_lcd_write_reg(0x2b);//行地址设置
-		drv_lcd_write_halfword(y1+2);
-		drv_lcd_write_halfword(y2+2);
+		drv_lcd_write_halfword(y1);
+		drv_lcd_write_halfword(y2);
 		drv_lcd_write_reg(0x2c);//储存器写
 	}
 }
@@ -155,51 +155,44 @@ void plugin_lcd_address_set(uint16_t x1,uint16_t y1,uint16_t x2,uint16_t y2)
  */
 void plugin_lcd_color_fill_dma(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, const uint16_t *color_map)
 {
-	// 校验参数合法性
-	if (x1 > x2 || y1 > y2 || color_map == NULL) return;
-	
-	// 计算总像素数和总字节数（每个像素16位，拆分为2字节传输）
-	uint32_t pixel_count = (uint32_t)(x2 - x1 + 1) * (y2 - y1 + 1);
-	if (pixel_count == 0) return;
-	
-	// 静态转换缓冲区（大小可根据内存调整，需为偶数，此处2048字节=1024像素）
-	static uint8_t dma_buf[2048];
-	uint32_t buf_pixel_max = sizeof(dma_buf) / 2;  // 缓冲区最大容纳像素数
-	
-	// 设置显示区域
-	plugin_lcd_address_set(x1, y1, x2, y2);
-	
-	// 选中LCD并切换到数据模式
-	LCD_CS_LOW();
-	LCD_DC_HIGH();
-	
-	// 分块传输颜色数据
-	uint32_t remaining_pixel = pixel_count;
-	const uint16_t *color_ptr = color_map;  // 颜色数据指针（避免修改原指针）
-	
-	while (remaining_pixel > 0)
-	{
-		// 计算当前块传输的像素数（不超过缓冲区容量）
-		uint32_t send_pixel = remaining_pixel > buf_pixel_max ? buf_pixel_max : remaining_pixel;
-		uint32_t send_bytes = send_pixel * 2;  // 转换为字节数
-		
-		// 将16位颜色数据转换为字节流（高8位+低8位）
-		for (uint32_t i = 0; i < send_pixel; i++)
-		{
-			dma_buf[i * 2] = color_ptr[i] >> 8;       // 高8位
-			dma_buf[i * 2 + 1] = color_ptr[i] & 0xFF; // 低8位
-		}
-		
-		// DMA发送当前块数据
-		drv_lcd_dma_send_data(dma_buf, send_bytes);
-		
-		// 更新剩余像素数和颜色指针
-		remaining_pixel -= send_pixel;
-		color_ptr += send_pixel;
-	}
-	
-	// 取消选中LCD
-	LCD_CS_HIGH();
+    if (x1 > x2 || y1 > y2 || color_map == NULL) return;
+
+    uint32_t pixel_count = (uint32_t)(x2 - x1 + 1) * (y2 - y1 + 1);
+    if (pixel_count == 0) return;
+
+    // 【关键1：缓冲区大小设为“屏幕宽度的整数倍”（如128像素=256字节），避免行跨块】
+    static uint8_t dma_buf[256] __attribute__((aligned(4))); // 128像素（16位色），32位对齐
+    uint32_t buf_pixel_max = sizeof(dma_buf) / 2;  // 128像素（必须是屏幕宽度的整数倍！）
+
+    plugin_lcd_address_set(x1, y1, x2, y2);
+    LCD_CS_LOW();
+    LCD_DC_HIGH();
+
+    uint32_t remaining_pixel = pixel_count;
+    const uint16_t *color_ptr = color_map;
+
+    while (remaining_pixel > 0)
+    {
+        // 【关键2：计算当前块的像素数，严格按缓冲区容量取整】
+        uint32_t send_pixel = remaining_pixel > buf_pixel_max ? buf_pixel_max : remaining_pixel;
+        uint32_t send_bytes = send_pixel * 2;  // 16位色→字节数，必须是偶数！
+
+        // 【关键3：填充缓冲区时，严格循环send_pixel次，不越界】
+        for (uint32_t i = 0; i < send_pixel; i++)
+        {
+            dma_buf[i * 2] = color_ptr[i] >> 8;       // 高8位
+            dma_buf[i * 2 + 1] = color_ptr[i] & 0xFF; // 低8位
+        }
+
+        // DMA发送当前块
+        drv_lcd_dma_send_data(dma_buf, send_bytes);
+
+        // 【关键4：更新指针和剩余像素数，避免漏更/错更】
+        remaining_pixel -= send_pixel;
+        color_ptr += send_pixel;
+    }
+
+    LCD_CS_HIGH();
 }
 	
 /**

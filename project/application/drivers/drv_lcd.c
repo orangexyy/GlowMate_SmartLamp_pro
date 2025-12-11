@@ -166,16 +166,19 @@ void drv_lcd_dma_send_data(const uint8_t *data, uint32_t len)
     LCD_SPI_DMA_STREAM->M0AR = (uint32_t)data;          // 内存地址
     LCD_SPI_DMA_STREAM->NDTR = len;                     // 传输长度
 	
-    DMA_Cmd(LCD_SPI_DMA_STREAM, ENABLE);
+    DMA_ClearFlag(LCD_SPI_DMA_STREAM, DMA_FLAG_TCIF3);
     
     // 使能SPI DMA发送
     SPI_I2S_DMACmd(SPI1, SPI_I2S_DMAReq_Tx, ENABLE);
+    DMA_Cmd(LCD_SPI_DMA_STREAM, ENABLE);
     
     // 等待传输完成
     while (DMA_GetFlagStatus(LCD_SPI_DMA_STREAM, DMA_FLAG_TCIF3) == RESET);
-    
-    // 清除标志位
-    DMA_ClearFlag(LCD_SPI_DMA_STREAM, DMA_FLAG_TCIF3);
+
+    // 【关键添加：等待SPI发送缓冲区为空】
+    while (SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE) == RESET);
+    // 等待SPI总线忙标志清除（最后一个字节发送完毕）
+    while (SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_BSY) == SET);
     
     // 关闭SPI DMA
     SPI_I2S_DMACmd(SPI1, SPI_I2S_DMAReq_Tx, DISABLE);

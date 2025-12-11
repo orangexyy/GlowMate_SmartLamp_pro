@@ -17,6 +17,7 @@
 #include "app.h"
 #include "driver.h"
 #include "thread.h"
+#include "app_ui.h"
 
 /******************************************************************************\
                              Macro definitions
@@ -42,6 +43,8 @@ uint16_t i = 0;
  */
 void app_init(void)
 {
+    app_ui_init();
+    
     thread_create(app_task);
 }
 

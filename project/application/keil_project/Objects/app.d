@@ -1,0 +1,12 @@
+.\objects\app.o: ..\app\app.c
+.\objects\app.o: D:\Keil\ARM\ARMCC\Bin\..\include\stdio.h
+.\objects\app.o: D:\Keil\ARM\ARMCC\Bin\..\include\stdint.h
+.\objects\app.o: ..\app\app.h
+.\objects\app.o: ..\drivers\driver.h
+.\objects\app.o: ..\drivers\drv_output.h
+.\objects\app.o: ..\..\..\components\system\protothreads\thread.h
+.\objects\app.o: ..\..\..\components\system\protothreads\pt-1.4\pt.h
+.\objects\app.o: ..\..\..\components\system\protothreads\pt-1.4\lc.h
+.\objects\app.o: ..\..\..\components\system\protothreads\pt-1.4\lc-switch.h
+.\objects\app.o: ..\..\..\components\system\protothreads\pt-1.4\pt-sem.h
+.\objects\app.o: ..\app\app_ui.h

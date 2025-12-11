@@ -24,6 +24,7 @@
 #include "stm32f4xx_it.h"  
 #include "system.h"
 #include "thread.h"
+#include "lvgl.h"
 
 /** @addtogroup Template_Project
   * @{
@@ -136,6 +137,7 @@ void DebugMon_Handler(void)
 void SysTick_Handler(void)
 {
   thread_systick_handle();
+  lv_tick_inc(1);
   g_system_tick++;
 }
 
