@@ -50,13 +50,12 @@ static bool s_is_timer_enable[DRV_TIMER_ID_MAX] = {false};
                              Functions definitions
 \******************************************************************************/
 
-/*
-* 函数名称 : drv_timer_init
-* 功能描述 : 初始化定时器
-* 参    数 : p_this - 定时器句柄
-* 返回值   : 无
-* 示    例 : drv_timer_init(p_this, irq_callback);
-*/
+/**
+ * \brief 初始化定时器
+ * \param p_this: 定时器句柄
+ * \param irq_callback: 中断回调函数
+ * \return 无
+ */
 void drv_timer_init(TS_TIMER_HANDLE *p_this, DRV_TIMER_CALLBACK irq_callback)
 {
 	TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStructure;
@@ -80,13 +79,11 @@ void drv_timer_init(TS_TIMER_HANDLE *p_this, DRV_TIMER_CALLBACK irq_callback)
 	s_timer_config[p_this->id].irq_callback = irq_callback;
 }
 
-/*
-* 函数名称 : drv_timer_enable
-* 功能描述 : 启动定时器
-* 参    数 : id - 定时器ID
-* 返回值   : int：返回错误代码
-* 示    例 : drv_timer_enable(id);	
-*/
+/**
+ * \brief 启动定时器
+ * \param id: 定时器ID
+ * \return 无
+ */
 int drv_timer_enable(TE_DRV_TIMER_ID id)
 {
     if (id >= DRV_TIMER_ID_MAX)
@@ -101,13 +98,11 @@ int drv_timer_enable(TE_DRV_TIMER_ID id)
 }
 
 
-/*
-* 函数名称 : drv_timer_disable
-* 功能描述 : 关闭定时器
-* 参    数 : id - 定时器ID
-* 返回值   : int：返回错误代码
-* 示    例 : drv_timer_disable(id);	
-*/
+/**
+ * \brief 关闭定时器
+ * \param id: 定时器ID
+ * \return 无
+ */
 int drv_timer_disable(TE_DRV_TIMER_ID id)
 {
     
@@ -123,20 +118,21 @@ int drv_timer_disable(TE_DRV_TIMER_ID id)
 }
 
 
-/*
-* 函数名称 : drv_timer_is_busy
-* 功能描述 : 获取定时器忙状态
-* 参    数 : id - 定时器ID
-* 返回值   : 忙状态
-* 示    例 : bool result = drv_timer_is_busy(id);
-*/
+/**
+ * \brief 获取定时器忙状态
+ * \param id: 定时器ID
+ * \return 忙状态
+ */
 bool drv_timer_is_busy(TE_DRV_TIMER_ID id)
 {
     return s_is_timer_enable[id];
 }
 
 
-//定时器4中断服务函数
+/**
+ * \brief 定时器4中断服务函数
+ * \return 无
+ */
 void TIM4_IRQHandler(void)
 {
 	if(TIM_GetITStatus(TIM4, TIM_IT_Update)==SET) //溢出中断

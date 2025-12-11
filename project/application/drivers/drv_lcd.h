@@ -12,14 +12,23 @@
 /****************************************************************************\
                                Includes
 \****************************************************************************/
-#ifndef __DRV_RGB_H
-#define __DRV_RGB_H
+#ifndef __DRV_LCD_H
+#define __DRV_LCD_H
 
-#include "sys.h"
-#include <stdint.h>
+#include "stdint.h"
 /****************************************************************************\
                             Macro definitions
 \****************************************************************************/
+#define USE_HORIZONTAL 1  	
+
+
+#if USE_HORIZONTAL==0||USE_HORIZONTAL==1
+#define LCD_W 128
+#define LCD_H 160
+#else
+#define LCD_W 160
+#define LCD_H 128
+#endif
 
 /****************************************************************************\
                             Typedef definitions
@@ -32,24 +41,59 @@
 /****************************************************************************\
                             Functions definitions
 \****************************************************************************/
-
 /**
- * \brief 初始化RGB
- * \return 无
- */ 
-void drv_rgb_init(void);    
-
-/**
- * \brief 发送RGB颜色数据
- * \param rgb_data: RGB颜色数据（32位，格式：0xRRGGBBWW等）
+ * \brief LCD初始化
  * \return 无
  */
-void drv_rgb_send(uint32_t rgb_data);
+void drv_lcd_init(void);
+
+/**
+ * \brief 使用DMA批量发送数据
+ * \param data: 数据缓冲区
+ * \param len: 数据长度(字节)
+ * \return 无
+ */
+void drv_lcd_dma_send_data(const uint8_t *data, uint32_t len);
+
+/**
+ * \brief SPI读写一个字节
+ * \param byte: 要读写的字节
+ * \return 读取到的字节
+ */
+uint8_t drv_lcd_spi_read_write_byte(uint8_t byte);
+
+/**
+ * \brief 写寄存器
+ * \param reg: 寄存器地址
+ * \return 无
+ */
+void drv_lcd_write_reg(uint8_t reg);
+
+/**
+ * \brief 写数据
+ * \param data: 数据
+ * \return 无
+ */ 
+void drv_lcd_write_byte(uint8_t data);
+
+/**
+ * \brief 写半字
+ * \param data: 数据
+ * \return 无
+ */
+void drv_lcd_write_halfword(uint16_t data);
+
+/**
+ * \brief 写半字数组
+ * \param dat: 半字数据数组
+ * \param len: 数据长度
+ * \return 无
+ */
+void drv_lcd_write_halfword_array(const uint16_t *dat, uint32_t len);
 
 #endif
 /****************************************************************************\
                             End of File
 \****************************************************************************/
-
 
 

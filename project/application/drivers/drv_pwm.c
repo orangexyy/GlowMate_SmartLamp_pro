@@ -85,6 +85,10 @@
 // 	TIM_CtrlPWMOutputs(TIM8, ENABLE);	//使能TIM1的PWM输出，TIM1与TIM8有效,如果没有这行会问题
 // }
 
+/**
+ * \brief PWM初始化
+ * \return 无
+ */
 void drv_pwm_init(void)
 {
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);  // 使能TIM3时钟
@@ -133,6 +137,12 @@ void drv_pwm_init(void)
 	
 }
 
+/**
+ * \brief 设置PWM占空比
+ * \param id: 通道ID
+ * \param duty: 占空比
+ * \return 无
+ */
 void drv_pwm_set_duty(uint8_t id, uint16_t duty)
 {
 	if (duty <= 0) duty = 0;

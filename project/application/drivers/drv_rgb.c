@@ -34,6 +34,10 @@ uint16_t rgb_data_buffer[RGB_BUFFER_SIZE] = {0};  // LED数据缓冲区
 /******************************************************************************\
                              Functions definitions
 \******************************************************************************/
+/**
+ * \brief 初始化RGB
+ * \return 无
+ */
 void drv_rgb_init(void)
 {
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);      /*使能GPIOE时钟*/
@@ -99,41 +103,43 @@ void drv_rgb_init(void)
     TIM_DMACmd(TIM1, TIM_DMA_CC1, ENABLE);                                      /*将TIM1的DMA请求映射到通道三并使能*/
 }
 
-/* @brief 将RGB数据编码到LED缓冲区
- * @param rgb_data: RGB颜色数据（32位）
- * @note 将32位RGB数据重复编码32次，每次编码32位，总共1024位
+/**
+ * \brief 将RGB数据编码到LED缓冲区
+ * \param rgb_data: RGB颜色数据（32位）
+ * \return 无
  */
- static void rgb_data_encode(uint32_t rgb_data)
- {
-     uint16_t buffer_idx = 0;
-     uint16_t repeat_idx, bit_idx;
-     uint32_t bit_mask;
+static void rgb_data_encode(uint32_t rgb_data)
+{
+    uint16_t buffer_idx = 0;
+    uint16_t repeat_idx, bit_idx;
+    uint32_t bit_mask;
+
+    // 重复发送32次相同的RGB数据
+    for(repeat_idx = 0; repeat_idx < RGB_REPEAT_COUNT; repeat_idx++)
+    {
+        // 从最高位到最低位依次检查每一位
+        bit_mask = 0x80000000;
+        for(bit_idx = 0; bit_idx < RGB_DATA_BITS; bit_idx++)
+        {
+            // 检查当前位是否为1
+            if(rgb_data & bit_mask)
+            {
+                rgb_data_buffer[buffer_idx] = RGB_CODE_1;
+            }
+            else
+            {
+                rgb_data_buffer[buffer_idx] = RGB_CODE_0;
+            }
+            buffer_idx++;
+            bit_mask >>= 1;  // 右移检查下一位
+        }
+    }
+}
  
-     // 重复发送32次相同的RGB数据
-     for(repeat_idx = 0; repeat_idx < RGB_REPEAT_COUNT; repeat_idx++)
-     {
-         // 从最高位到最低位依次检查每一位
-         bit_mask = 0x80000000;
-         for(bit_idx = 0; bit_idx < RGB_DATA_BITS; bit_idx++)
-         {
-             // 检查当前位是否为1
-             if(rgb_data & bit_mask)
-             {
-                 rgb_data_buffer[buffer_idx] = RGB_CODE_1;
-             }
-             else
-             {
-                 rgb_data_buffer[buffer_idx] = RGB_CODE_0;
-             }
-             buffer_idx++;
-             bit_mask >>= 1;  // 右移检查下一位
-         }
-     }
- }
- 
-/* @brief 通过DMA发送LED缓冲区数据
-* @note 启动DMA传输并等待传输完成
-*/
+/**
+ * \brief 通过DMA发送RGB数据
+ * \return 无
+ */
 static void rgb_dma_send(void)
 {
     DMA_SetCurrDataCounter(DMA2_Stream6, RGB_BUFFER_SIZE);         /*指定要传输的数据量*/
@@ -146,9 +152,10 @@ static void rgb_dma_send(void)
     TIM_Cmd(TIM1, DISABLE); 
 }
     
-/* @brief 发送RGB颜色数据
-* @param rgb_data: RGB颜色数据（32位，格式：0xRRGGBBWW等）
-* @note 将RGB数据编码为PWM波形并通过DMA发送
+/**
+ * \brief 发送RGB颜色数据
+ * \param rgb_data: RGB颜色数据（32位，格式：0xRRGGBBWW等）
+ * \return 无
 */
 void drv_rgb_send(uint32_t rgb_data)
 {
