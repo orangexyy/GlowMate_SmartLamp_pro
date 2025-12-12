@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": true,
-      "cwd": "c:/Users/S10928/Desktop/GlowMate_SmartLamp_pro/GlowMate_SmartLamp_pro/project/application/drivers",
-      "program": "c:/Users/S10928/Desktop/GlowMate_SmartLamp_pro/GlowMate_SmartLamp_pro/project/application/drivers/build/Debug/outDebug",
+      "cwd": "c:/Users/S10928/Desktop/GlowMate_SmartLamp_pro/GlowMate_SmartLamp_pro/third_party/lvgl/examples/porting",
+      "program": "c:/Users/S10928/Desktop/GlowMate_SmartLamp_pro/GlowMate_SmartLamp_pro/third_party/lvgl/examples/porting/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

@@ -71,15 +71,15 @@ static char driver_task(thread_t* pt)
         while (1)
         {
 			#if 1
-            // plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, WHITE);  // 红色RGB565编码 
-            // plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, RED);  // 黑色RGB565编码
-            // plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, YELLOW);  // 黄色RGB565编码
-            // plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, MAGENTA);  // 洋红色RGB565编码
-            // plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, CYAN);  // 青色RGB565编码
-            // plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, GREEN);  // 绿色RGB565编码 
-            // plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, BLUE);  // 蓝色RGB565编码
-            // plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, BROWN);  // 棕色RGB565编码
-            // plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, BRRED);  // 棕红色RGB565编码
+            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, WHITE);  // 红色RGB565编码 
+            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, RED);  // 黑色RGB565编码
+            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, YELLOW);  // 黄色RGB565编码
+            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, MAGENTA);  // 洋红色RGB565编码
+            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, CYAN);  // 青色RGB565编码
+            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, GREEN);  // 绿色RGB565编码 
+            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, BLUE);  // 蓝色RGB565编码
+            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, BROWN);  // 棕色RGB565编码
+            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, BRRED);  // 棕红色RGB565编码
 			
 			#else
 			plugin_lcd_fill (0, 0, LCD_W, LCD_H, WHITE);  // 红色RGB565编码 

@@ -105,41 +105,41 @@ void plugin_lcd_address_set(uint16_t x1,uint16_t y1,uint16_t x2,uint16_t y2)
     if(USE_HORIZONTAL==0)
 	{
 		drv_lcd_write_reg(0x2a);//列地址设置
-		drv_lcd_write_halfword(x1);
-		drv_lcd_write_halfword(x2);
+		drv_lcd_write_halfword(x1+2);
+		drv_lcd_write_halfword(x2+2);
 		drv_lcd_write_reg(0x2b);//行地址设置
-		drv_lcd_write_halfword(y1);
-		drv_lcd_write_halfword(y2);
+		drv_lcd_write_halfword(y1+1);
+		drv_lcd_write_halfword(y2+1);
 		drv_lcd_write_reg(0x2c);//储存器写
 	}
 	else if(USE_HORIZONTAL==1)
 	{
 		drv_lcd_write_reg(0x2a);//列地址设置
-		drv_lcd_write_halfword(x1);
-		drv_lcd_write_halfword(x2);
+		drv_lcd_write_halfword(x1+2);
+		drv_lcd_write_halfword(x2+2);
 		drv_lcd_write_reg(0x2b);//行地址设置
-		drv_lcd_write_halfword(y1);
-		drv_lcd_write_halfword(y2);
+		drv_lcd_write_halfword(y1+1);
+		drv_lcd_write_halfword(y2+1);
 		drv_lcd_write_reg(0x2c);//储存器写
 	}
 	else if(USE_HORIZONTAL==2)
 	{
 		drv_lcd_write_reg(0x2a);//列地址设置
-		drv_lcd_write_halfword(x1);
-		drv_lcd_write_halfword(x2);
+		drv_lcd_write_halfword(x1+1);
+		drv_lcd_write_halfword(x2+1);
 		drv_lcd_write_reg(0x2b);//行地址设置
-		drv_lcd_write_halfword(y1);
-		drv_lcd_write_halfword(y2);
+		drv_lcd_write_halfword(y1+2);
+		drv_lcd_write_halfword(y2+2);
 		drv_lcd_write_reg(0x2c);//储存器写
 	}
 	else
 	{
 		drv_lcd_write_reg(0x2a);//列地址设置
-		drv_lcd_write_halfword(x1);
-		drv_lcd_write_halfword(x2);
+		drv_lcd_write_halfword(x1+1);
+		drv_lcd_write_halfword(x2+1);
 		drv_lcd_write_reg(0x2b);//行地址设置
-		drv_lcd_write_halfword(y1);
-		drv_lcd_write_halfword(y2);
+		drv_lcd_write_halfword(y1+2);
+		drv_lcd_write_halfword(y2+2);
 		drv_lcd_write_reg(0x2c);//储存器写
 	}
 }

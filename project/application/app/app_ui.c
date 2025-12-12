@@ -19,8 +19,16 @@
 #include "thread.h"
 #include "lvgl.h"
 #include "lv_port_disp_template.h"
+#include "ui_cont.h"
+#include "ui_label.h"
+#include "ui_anim.h"
+#include "ui_text_font.h"
+#include "ui_text_language.h"
+#include "ui_page_manager.h" 
+#include "ui_home.h" 
+#include "ui_weather.h" 
 #include "plugin_lcd.h"
-
+#include "drv_lcd.h"
 /******************************************************************************\
                              Macro definitions
 \******************************************************************************/
@@ -39,6 +47,12 @@
 
 static char app_ui_task (thread_t* pt);
 
+LV_IMG_DECLARE(TEST);
+
+extern const lv_img_dsc_t TEST;
+
+lv_obj_t * img = NULL;
+
 /**
  * \brief app初始化
  */
@@ -46,25 +60,21 @@ void app_ui_init(void)
 {
     lv_init();
     lv_port_disp_init();
+    plugin_lcd_fill_dma(0, 0, LCD_W, LCD_H, BLUE);  // 红色RGB565编码
 
-    plugin_lcd_fill(0, 0, 128, 160, WHITE);
+    ui_text_language_init();
+    // ui_page_manager_init();
+    // ui_page_register(UI_PAGE_ID_HOME, (ui_page_init_func)ui_home_init, (ui_page_exit_func)ui_home_exit, (ui_page_on_enter_callback_func)ui_home_on_enter, (ui_page_on_exit_callback_func)ui_home_on_exit);
+    // ui_page_register(UI_PAGE_ID_WEATHER, (ui_page_init_func)ui_weather_init, (ui_page_exit_func)ui_weather_exit, (ui_page_on_enter_callback_func)ui_weather_on_enter, (ui_page_on_exit_callback_func)ui_weather_on_exit);
+    // ui_page_switch(UI_PAGE_ID_HOME);
 
-    // 1. 创建按钮（父对象为屏幕根对象）
-    lv_obj_t *btn = lv_btn_create(lv_scr_act());
-    lv_obj_set_pos(btn, 20, 20);        // 位置：X=20, Y=20
-    lv_obj_set_size(btn, 80, 40);       // 大小：宽80，高40
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0xFF0000), LV_STATE_DEFAULT);  // 红色背景
+    img = lv_img_create(lv_scr_act());
+    lv_img_set_src(img, &TEST);
+    lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
 
-    // 2. 在按钮上创建标签
-    lv_obj_t *label = lv_label_create(btn);
-    lv_label_set_text(label, "LVGL v9");// 标签文本
-    lv_obj_center(label);               // 标签在按钮中居中
+    TS_UI_ANIM_SINGLE_CONTROL fade_anim;
+    ui_anim_fade(&fade_anim, img, 0, 255, 1000, 0, -1);
 
-    // 3. 创建一个文本标签（显示在屏幕下方）
-    lv_obj_t *label2 = lv_label_create(lv_scr_act());
-    lv_label_set_text(label2, "Test OK!");
-    lv_obj_set_pos(label2, 40, 120);
-    lv_obj_set_style_text_color(label2, lv_color_hex(0x00FF00), LV_STATE_DEFAULT);  // 绿色文本
 
     thread_create(app_ui_task);
 }

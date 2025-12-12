@@ -313,7 +313,7 @@
           </ArmAdsMisc>
           <Cads>
             <interw>1</interw>
-            <Optim>1</Optim>
+            <Optim>4</Optim>
             <oTime>0</oTime>
             <SplitLS>0</SplitLS>
             <OneElfS>1</OneElfS>
@@ -339,7 +339,7 @@
               <MiscControls>--diag_suppress=68 --diag_suppress=111 --diag_suppress=188 --diag_suppress=223 --diag_suppress=546  --diag_suppress=1295</MiscControls>
               <Define>STM32F40_41xxx,USE_STDPERIPH_DRIVER,NDEBUG</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\..\library;..\..\..\components\common;..\..\..\components\public;..\..\..\components\system\protothreads;..\..\..\components\system\protothreads\pt-1.4;..\startup;..\main;..\app;..\services;..\plugins;..\drivers;..\..\..\third_party\lvgl;..\..\..\third_party\lvgl\src;..\..\..\third_party\lvgl\examples\porting</IncludePath>
+              <IncludePath>..\..\..\library;..\..\..\components\common;..\..\..\components\public;..\..\..\components\system\protothreads;..\..\..\components\system\protothreads\pt-1.4;..\startup;..\main;..\app;..\ui;..\services;..\plugins;..\drivers;..\..\..\third_party\lvgl;..\..\..\third_party\lvgl\src;..\..\..\third_party\lvgl\examples\porting;..\..\..\components\middleware\ui_widgets\ui_cont;..\..\..\components\middleware\ui_widgets\ui_label;..\..\..\components\middleware\ui_widgets\ui_img;..\..\..\components\middleware\ui_widgets\ui_img\img_source;..\..\..\components\middleware\ui_widgets\ui_anim;..\..\..\components\middleware\ui_widgets\ui_page_manager</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -417,6 +417,36 @@
               <FileName>app_ui.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\app\app_ui.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>ui</GroupName>
+          <Files>
+            <File>
+              <FileName>ui_text_font.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ui\ui_text_font.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_text_language.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ui\ui_text_language.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_page_manager.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ui\ui_page_manager.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_home.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ui\ui_home.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_weather.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ui\ui_weather.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -929,6 +959,41 @@
           </Files>
         </Group>
         <Group>
+          <GroupName>middleware/ui_widgets</GroupName>
+          <Files>
+            <File>
+              <FileName>ui_cont.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\middleware\ui_widgets\ui_cont\ui_cont.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_label.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\middleware\ui_widgets\ui_label\ui_label.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_img.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\middleware\ui_widgets\ui_img\ui_img.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_anim.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\middleware\ui_widgets\ui_anim\ui_anim.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>middleware/ui_widgets/img_source</GroupName>
+          <Files>
+            <File>
+              <FileName>TEST.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\components\middleware\ui_widgets\ui_img\img_source\TEST.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
           <GroupName>third_party/lvgl/example/porting</GroupName>
           <Files>
             <File>
@@ -1382,24 +1447,9 @@
               <FilePath>..\..\..\third_party\lvgl\src\font\lv_font_montserrat_14.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_28_compressed.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\third_party\lvgl\src\font\lv_font_montserrat_28_compressed.c</FilePath>
-            </File>
-            <File>
-              <FileName>lv_font_montserrat_30.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\third_party\lvgl\src\font\lv_font_montserrat_30.c</FilePath>
-            </File>
-            <File>
               <FileName>lv_font_montserrat_32.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\third_party\lvgl\src\font\lv_font_montserrat_32.c</FilePath>
-            </File>
-            <File>
-              <FileName>lv_font_montserrat_34.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\third_party\lvgl\src\font\lv_font_montserrat_34.c</FilePath>
             </File>
             <File>
               <FileName>lv_font_montserrat_36.c</FileName>
@@ -1407,9 +1457,19 @@
               <FilePath>..\..\..\third_party\lvgl\src\font\lv_font_montserrat_36.c</FilePath>
             </File>
             <File>
-              <FileName>lv_font_montserrat_42.c</FileName>
+              <FileName>lv_font_montserrat_40.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\..\third_party\lvgl\src\font\lv_font_montserrat_42.c</FilePath>
+              <FilePath>..\..\..\third_party\lvgl\src\font\lv_font_montserrat_40.c</FilePath>
+            </File>
+            <File>
+              <FileName>lv_font_montserrat_38.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\third_party\lvgl\src\font\lv_font_montserrat_38.c</FilePath>
+            </File>
+            <File>
+              <FileName>lv_font_montserrat_48.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\third_party\lvgl\src\font\lv_font_montserrat_48.c</FilePath>
             </File>
           </Files>
         </Group>

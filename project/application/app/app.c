@@ -61,6 +61,14 @@ static char app_task(thread_t* pt)
             flag = !flag;
             i++;
             drv_output_set_value(OUTPUT_ID_0, flag);
+//            if (flag)
+//            {
+//                ui_page_switch(UI_PAGE_ID_WEATHER);
+//            }
+//            else
+//            {
+//                ui_page_switch(UI_PAGE_ID_HOME);
+//            }
             thread_sleep(1000);
         }
     }
