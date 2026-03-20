@@ -19,11 +19,11 @@
 /****************************************************************************\
                             Macro definitions
 \****************************************************************************/
-#define DHT11_IO_IN()   {GPIOA->CRH&=0XFFF0FFFF;GPIOA->CRH|=8<<16;}
-#define DHT11_IO_OUT()  {GPIOA->CRH&=0XFFF0FFFF;GPIOA->CRH|=3<<16;} 
+#define DHT11_IO_IN()   {GPIOA->CRH&=0XFFFFFFF0;GPIOA->CRH|=8<<0;}
+#define DHT11_IO_OUT()  {GPIOA->CRH&=0XFFFFFFF0;GPIOA->CRH|=3<<0;} 
 //IO操作函数   
-#define	DHT11_DQ_OUT    PAout(12)
-#define	DHT11_DQ_IN     PAin(12) 
+#define	DHT11_DQ_OUT    PAout(8)
+#define	DHT11_DQ_IN     PAin(8) 
 /****************************************************************************\
                             Typedef definitions
 \****************************************************************************/

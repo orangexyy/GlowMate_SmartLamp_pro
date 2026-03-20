@@ -1,19 +1,16 @@
 /****************************************************************************\
 **  版    权 :  深圳市创客工场科技有限公司(MakeBlock)所有（2030）
-**  文件名称 :  
-**  功能描述 :  
-**  作    者 :  
-**  日    期 :  
+**  文件名称 :  svc_key.c
+**  功能描述 :  按键服务。扫描、短按/长按/长按保持/组合键检测，回调上报按键事件。
+**  作    者 :  -
+**  日    期 :  -
 **  版    本 :  V0.0.1
-**  变更记录 :  V0.0.1/
-                1 首次创建
 \****************************************************************************/  
 
 /****************************************************************************\
                                Includes
 \****************************************************************************/
-
-#include "mk_common.h" 
+#include "common.h"
 #include "svc_key.h"
 #include "drv_key.h" 
 #include "thread.h"
@@ -28,7 +25,7 @@
             {                              \
                 target->priv.event = evt;  \
                 if(target->cfg->cb)        \
-                    target->cfg->cb(i, evt, target->priv.key_val, target->priv.click_cnt); \
+                    target->cfg->cb(target->cfg->key_id, evt, target->priv.key_val, target->priv.click_cnt); \
             } while(0)
         
 enum
@@ -68,6 +65,21 @@ static uint8_t s_key_num = 0;
 /****************************************************************************\
                             Functions definitions
 \****************************************************************************/
+/**
+ * \brief 根据按键 ID 获取对应的按键结构体指针
+ * \param key_id 按键 ID
+ * \return 对应的按键结构体指针，未找到返回 NULL
+ */
+static inline TS_KEY *svc_key_id_to_key(uint8_t key_id)
+{
+    int _idx = 0;
+    do {
+        if (s_key_list[_idx].cfg->key_id == key_id) {
+            return &s_key_list[_idx]; 
+        }       
+    } while ((++_idx) < s_key_num);
+    return NULL;  
+}
  
 static int _svc_key_scan(void)
 {
@@ -250,7 +262,7 @@ static int _svc_key_scan(void)
         }
     }
 
-    return MK_SUCCESS;
+    return SUCCESS;
 }
 
 /**
@@ -279,7 +291,7 @@ int svc_key_init(const TS_KEY_CFG *key_tab, uint8_t key_num)
     uint8_t i = 0;
     
     if (key_tab == NULL)
-        return MK_ERROR_NULL_POINTER;
+        return ERROR_NULL_POINTER;
     
     for (; i<key_num; i++) {
         memset(&s_key_list[i], 0, sizeof(TS_KEY));
@@ -309,8 +321,13 @@ int svc_key_get_num(void)
  */
 int svc_key_suspend(uint8_t id)
 {    
-    s_key_list[id].priv.active = 0;
-    return MK_SUCCESS;
+    TS_KEY *target = svc_key_id_to_key(id);
+    if (target == NULL)
+    {
+        return ERROR_NULL_POINTER;
+    }
+    target->priv.active = 0;
+    return SUCCESS;
 }
 
 /**
@@ -320,11 +337,16 @@ int svc_key_suspend(uint8_t id)
  */
 int svc_key_resume(uint8_t id)
 {  
-    s_key_list[id].priv.active   = 1;
-    s_key_list[id].priv.click_cnt = 0;
-    s_key_list[id].priv.scan_cnt  = 0;
-    s_key_list[id].priv.event    = KEY_STAGE_DEFAULT;
-    return MK_SUCCESS;
+    TS_KEY *target = svc_key_id_to_key(id);
+    if (target == NULL)
+    {
+        return ERROR_NULL_POINTER;
+    }
+    target->priv.active   = 1;
+    target->priv.click_cnt = 0;
+    target->priv.scan_cnt  = 0;
+    target->priv.event    = KEY_STAGE_DEFAULT;
+    return SUCCESS;
 }
 
 /**
@@ -337,7 +359,7 @@ int svc_key_suspend_all(void)
     {
         s_key_list[i].priv.active = 0; 
     }
-    return MK_SUCCESS;
+    return SUCCESS;
 }
 
 /**
@@ -353,7 +375,7 @@ int svc_key_resume_all(void)
         s_key_list[i].priv.scan_cnt  = 0;
         s_key_list[i].priv.event    = KEY_STAGE_DEFAULT; 
     }
-    return MK_SUCCESS;
+    return SUCCESS;
 }
 
 /******************************* End of File (C）****************************/

@@ -1,34 +1,34 @@
 /****************************************************************************\
-**  版    权 : 
-**  文件名称 :  
-**  功能描述 :  
-**  作    者 :  
-**  日    期 :  
+**  文件名称 :  driver.c
+**  功能描述 :  驱动层总入口。初始化各子驱动、注册串口接收回调与 M 码处理，并创建驱动协程任务。
+**  作    者 :  -
+**  日    期 :  -
 **  版    本 :  V0.0.1
-**  变更记录 :  V0.0.1/
-                1 首次创建
 \****************************************************************************/
 
 /******************************************************************************\
                                  Includes
 \******************************************************************************/
+#include <stdint.h>
 #include <stdio.h>
-
-#include "driver.h"
+#include <string.h>
+#include "drv_flash.h"
 #include "system.h"
+#include "driver.h"
 #include "drv_comm.h"
 #include "drv_key.h"
+#include "drv_adc.h"
+#include "drv_rgb.h"
+#include "drv_dht11.h"
+#include "drv_rtc.h"
 #include "drv_input.h"
 #include "drv_output.h"
-#include "drv_pwm.h"    
-#include "drv_adc.h"
-#include "drv_oled.h"
-#include "drv_rtc.h"
 #include "drv_timer.h"
-#include "drv_rgb.h"
-#include "drv_lcd.h"
-#include "plugin_lcd.h"
+#include "plugin_rgb.h"
+#include "plugin_led.h"
 #include "thread.h"
+#include "upgrade_manager.h"
+#include "mcode_command.h"
 /******************************************************************************\
                              Macro definitions
 \******************************************************************************/
@@ -46,19 +46,46 @@
 \******************************************************************************/
 static char driver_task (thread_t* pt);
 
+/** 串口1 接收回调：回显并解析 M 码 */
+static void usart1_rx_callback_handler(uint8_t *data, uint16_t len)
+{
+	// printf("%s\r\n", data);
+	drv_usart_send_data(DRV_USART_ID_1, data, len);
+	process_m_code(DRV_USART_ID_1, (char *)data, len);
+}
+
+/** 串口2 接收回调：回显并解析 M 码 */
+static void usart2_rx_callback_handler(uint8_t *data, uint16_t len)
+{
+	process_m_code(DRV_USART_ID_2, (char *)data, len);
+}
+
 
 /**
  * \brief 驱动初始化
  */
 void driver_init(void)
-{    
+{   
+    drv_flash_init();
+    drv_usart_init(DRV_USART_ID_1, 115200, usart1_rx_callback_handler);         //调试、升级、电脑通信
+    drv_usart_init(DRV_USART_ID_2, 115200, usart2_rx_callback_handler);         //语音通信
+	drv_usart_init(DRV_USART_ID_3, 9600, NULL);                                 //MP3播放
+	drv_key_init();                                                                                 //按键
+	drv_adc_init();                                                                                 //ADC
+	drv_rgb_init();                                                                                 //RGB
+	drv_input_init();
+	drv_output_init();
+	drv_dht11_init();                                                                               //DHT11
+	drv_rtc_init();                                                                                 //RTC
+	drv_timer3_init();                                                                              //定时器3
+	drv_timer4_init();                                                                              //定时器4
+	plugin_rgb_init();                                                                              //RGB插件
+	plugin_led_init();
 	
-    // // 初始化屏幕
-    // plugin_lcd_init();
-    // // 填充红色背景
-    // plugin_lcd_fill_dma(0, 0, LCD_W, LCD_H, WHITE);  // 红色RGB565编码
-    // thread_create(driver_task);
+	
+    thread_create(driver_task);
 }
+
 
 /**
  * \brief 任务
@@ -67,35 +94,14 @@ static char driver_task(thread_t* pt)
 {
     thread_begin
     {
-
+		
         while (1)
         {
-			#if 1
-            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, WHITE);  // 红色RGB565编码 
-            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, RED);  // 黑色RGB565编码
-            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, YELLOW);  // 黄色RGB565编码
-            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, MAGENTA);  // 洋红色RGB565编码
-            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, CYAN);  // 青色RGB565编码
-            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, GREEN);  // 绿色RGB565编码 
-            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, BLUE);  // 蓝色RGB565编码
-            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, BROWN);  // 棕色RGB565编码
-            plugin_lcd_fill_dma (0, 0, LCD_W, LCD_H, BRRED);  // 棕红色RGB565编码
-			
-			#else
-			plugin_lcd_fill (0, 0, LCD_W, LCD_H, WHITE);  // 红色RGB565编码 
-            plugin_lcd_fill (0, 0, LCD_W, LCD_H, RED);  // 黑色RGB565编码
-            plugin_lcd_fill (0, 0, LCD_W, LCD_H, YELLOW);  // 黄色RGB565编码
-            plugin_lcd_fill (0, 0, LCD_W, LCD_H, MAGENTA);  // 洋红色RGB565编码
-            plugin_lcd_fill (0, 0, LCD_W, LCD_H, CYAN);  // 青色RGB565编码
-            plugin_lcd_fill (0, 0, LCD_W, LCD_H, GREEN);  // 绿色RGB565编码 
-            plugin_lcd_fill (0, 0, LCD_W, LCD_H, BLUE);  // 蓝色RGB565编码
-            plugin_lcd_fill (0, 0, LCD_W, LCD_H, BROWN);  // 棕色RGB565编码
-            plugin_lcd_fill (0, 0, LCD_W, LCD_H, BRRED);  // 棕红色RGB565编码
-			#endif
-			
-            thread_yield();
+
+            thread_sleep(500);
         }
     }
     thread_end
 }
+
 

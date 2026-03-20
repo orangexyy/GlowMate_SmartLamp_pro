@@ -25,9 +25,13 @@
 \****************************************************************************/
 typedef enum
 {
-	DRV_ADC_ID_0 = 0,
-	DRV_ADC_ID_1 = 1,
-} TE_DRV_ADC_ID;
+    ADC_ID_POWER_DETECT = 0,
+    ADC_ID_VOLUME_ADJUST,
+    ADC_ID_LIGHT_ADJUST,
+    ADC_ID_LIGHT_SENSOR_1,
+    ADC_ID_LIGHT_SENSOR_2,
+    ADC_ID_MAX
+} TE_ADC_ID;
 /****************************************************************************\
                             Variables definitions
 \****************************************************************************/
@@ -37,7 +41,7 @@ typedef enum
 \****************************************************************************/
 
 void drv_adc_init(void);
-uint16_t drv_adc_get_value(TE_DRV_ADC_ID id);
+uint16_t drv_adc_get_value(uint8_t id);
 
 #endif
 /****************************************************************************\

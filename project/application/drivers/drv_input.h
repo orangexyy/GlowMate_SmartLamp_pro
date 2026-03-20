@@ -25,8 +25,10 @@
 \****************************************************************************/
 typedef enum
 {
-	INPUT_ID_0,
-	INPUT_ID_1,
+    INPUT_ID_MW_DETECT = 0,
+    INPUT_ID_IR_DETECT_1,
+    INPUT_ID_IR_DETECT_2,
+    INPUT_ID_MAX
 } TE_INPUT_ID;
 /****************************************************************************\
                             Variables definitions
@@ -43,6 +45,7 @@ void drv_input_init(void);
 
 /**
  * \brief 获取输入值
+ * \param id 输入id
  * \return 输入值
  */
 uint8_t drv_input_get_value(uint8_t id);

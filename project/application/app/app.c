@@ -1,23 +1,27 @@
 /****************************************************************************\
-**  版    权 : 
-**  文件名称 :  
-**  功能描述 :  
-**  作    者 :  
-**  日    期 :  
+**  文件名称 :  app.c
+**  功能描述 :  应用层总入口。初始化按键/灯光/MP3/外设/事件处理/升级，并创建
+**             主应用协程（心跳 LED、定时闹钟轮询、调试打印等）。
+**  作    者 :  -
+**  日    期 :  -
 **  版    本 :  V0.0.1
-**  变更记录 :  V0.0.1/
-                1 首次创建
 \****************************************************************************/
 
 /******************************************************************************\
                                  Includes
 \******************************************************************************/
 #include <stdio.h>
+#include <string.h>
 #include <stdint.h>
 #include "app.h"
+#include "app_key.h"
+#include "app_light.h"
+#include "app_mp3.h"
+#include "app_periph.h"
+#include "app_event_process.h"
+#include "upgrade_manager.h"
 #include "driver.h"
 #include "thread.h"
-#include "app_ui.h"
 
 /******************************************************************************\
                              Macro definitions
@@ -34,17 +38,20 @@
 /******************************************************************************\
                              Functions definitions
 \******************************************************************************/
-
 static char app_task (thread_t* pt);
 
-uint16_t i = 0;
 /**
  * \brief app初始化
  */
 void app_init(void)
 {
-    app_ui_init();
-    
+	app_key_init();
+    app_light_init();
+	app_mp3_init();
+	app_periph_init();
+    app_event_process_init();
+	upgrade_init();
+	
     thread_create(app_task);
 }
 
@@ -53,23 +60,16 @@ void app_init(void)
  */
 static char app_task(thread_t* pt)
 {
-    static uint8_t flag = 1;
+	static uint8_t flag;
     thread_begin
     {
         while (1)
         {
-            flag = !flag;
-            i++;
-            drv_output_set_value(OUTPUT_ID_0, flag);
-//            if (flag)
-//            {
-//                ui_page_switch(UI_PAGE_ID_WEATHER);
-//            }
-//            else
-//            {
-//                ui_page_switch(UI_PAGE_ID_HOME);
-//            }
-            thread_sleep(1000);
+			flag = !flag;
+			drv_output_set_value(OUTPUT_ID_LED, flag);
+			drv_timer_alarm_poll();
+            printf("app_task\r\n");
+		    thread_sleep(1000);
         }
     }
     thread_end

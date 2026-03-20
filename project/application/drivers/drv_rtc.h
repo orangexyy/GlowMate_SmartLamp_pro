@@ -38,45 +38,25 @@
 * \return 无
 */
 void drv_rtc_init(void);
- 
+
 /**
 * \brief 设置时间
-* \param hour 小时
-* \param min 分钟
-* \param sec 秒
-* \param ampm 上午下午
 * \return 无
 */
-ErrorStatus drv_rtc_set_time(uint8_t hour,uint8_t min,uint8_t sec,uint8_t ampm);
+void drv_rtc_set_time(void);
 
 /**
-* \brief 设置日期
-* \param year 年
-* \param month 月
-* \param date 日
-* \param week 周
+* \brief 设置时间
 * \return 无
 */
-ErrorStatus drv_rtc_set_date(uint8_t year,uint8_t month,uint8_t date,uint8_t week);
+void drv_rtc_set_timestamp(uint32_t timestamp);
 
 /**
-* \brief 单次读取RTC当前时间和日期（主动获取）
-* \param rtc_time 时间
-* \param rtc_date 日期
-* \return 无（数据存入全局变量g_rtc_time/g_rtc_date）
-* \note 必须遵循「先读时间、后读日期」的顺序，否则数据可能不一致
-*/
-void drv_rtc_get_time_date(RTC_TimeTypeDef *rtc_time, RTC_DateTypeDef *rtc_date);
-
-
-/**
-* \brief 设置闹钟
-* \param hour 小时
-* \param min 分钟
-* \param sec 秒
+* \brief 读取时间
+* \param time_data 时间数据
 * \return 无
 */
-void drv_rtc_set_alarm(uint8_t hour,uint8_t min,uint8_t sec);
+void drv_rtc_read_time(uint16_t* time_data);
 
 #endif
 /****************************************************************************\

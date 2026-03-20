@@ -1,104 +1,68 @@
 /****************************************************************************\
-**  版    权 : 
-**  文件名称 :  
-**  功能描述 :  
-**  作    者 :  
-**  日    期 :  
+**  文件名称 :  sys.h
+**  功能描述 :  系统底层头文件。WFI/中断开关/MSR_MSP 声明、位带与 GPIO 地址宏。
+**  作    者 :  -
+**  日    期 :  -
 **  版    本 :  V0.0.1
-**  变更记录 :  V0.0.1/
-                1 首次创建
 \****************************************************************************/
 
-/******************************************************************************\
-                                 Includes
-\******************************************************************************/
 #ifndef __SYS_H
-#define __SYS_H	 
-#include "stm32f4xx.h" 
-#include "stm32f4xx_conf.h"
-#include "stdio.h"	
-#include "stdlib.h"
-#include <stdint.h>
-/******************************************************************************\
-                             Macro definitions
-\******************************************************************************/
-#define SYSTEM_SUPPORT_UCOS		0		
+#define __SYS_H	
+#include "stm32f10x.h"
+/** 0 不支持 ucos，1 支持 ucos */
+#define SYSTEM_SUPPORT_OS		0		//定义系统文件夹是否支持UCOS
 																	    
+	 
+//位带操作,实现51类似的GPIO控制功能
+//具体实现思想,参考<<CM3权威指南>>第五章(87页~92页).
+//IO口操作宏定义
 #define BITBAND(addr, bitnum) ((addr & 0xF0000000)+0x2000000+((addr &0xFFFFF)<<5)+(bitnum<<2)) 
 #define MEM_ADDR(addr)  *((volatile unsigned long  *)(addr)) 
 #define BIT_ADDR(addr, bitnum)   MEM_ADDR(BITBAND(addr, bitnum)) 
+//IO口地址映射
+#define GPIOA_ODR_Addr    (GPIOA_BASE+12) //0x4001080C 
+#define GPIOB_ODR_Addr    (GPIOB_BASE+12) //0x40010C0C 
+#define GPIOC_ODR_Addr    (GPIOC_BASE+12) //0x4001100C 
+#define GPIOD_ODR_Addr    (GPIOD_BASE+12) //0x4001140C 
+#define GPIOE_ODR_Addr    (GPIOE_BASE+12) //0x4001180C 
+#define GPIOF_ODR_Addr    (GPIOF_BASE+12) //0x40011A0C    
+#define GPIOG_ODR_Addr    (GPIOG_BASE+12) //0x40011E0C    
 
-
-#define GPIOA_ODR_Addr    (GPIOA_BASE+20) //0x40020014
-#define GPIOB_ODR_Addr    (GPIOB_BASE+20) //0x40020414 
-#define GPIOC_ODR_Addr    (GPIOC_BASE+20) //0x40020814 
-#define GPIOD_ODR_Addr    (GPIOD_BASE+20) //0x40020C14 
-#define GPIOE_ODR_Addr    (GPIOE_BASE+20) //0x40021014 
-#define GPIOF_ODR_Addr    (GPIOF_BASE+20) //0x40021414    
-#define GPIOG_ODR_Addr    (GPIOG_BASE+20) //0x40021814   
-#define GPIOH_ODR_Addr    (GPIOH_BASE+20) //0x40021C14    
-#define GPIOI_ODR_Addr    (GPIOI_BASE+20) //0x40022014     
-
-#define GPIOA_IDR_Addr    (GPIOA_BASE+16) //0x40020010 
-#define GPIOB_IDR_Addr    (GPIOB_BASE+16) //0x40020410 
-#define GPIOC_IDR_Addr    (GPIOC_BASE+16) //0x40020810 
-#define GPIOD_IDR_Addr    (GPIOD_BASE+16) //0x40020C10 
-#define GPIOE_IDR_Addr    (GPIOE_BASE+16) //0x40021010 
-#define GPIOF_IDR_Addr    (GPIOF_BASE+16) //0x40021410 
-#define GPIOG_IDR_Addr    (GPIOG_BASE+16) //0x40021810 
-#define GPIOH_IDR_Addr    (GPIOH_BASE+16) //0x40021C10 
-#define GPIOI_IDR_Addr    (GPIOI_BASE+16) //0x40022010 
+#define GPIOA_IDR_Addr    (GPIOA_BASE+8) //0x40010808 
+#define GPIOB_IDR_Addr    (GPIOB_BASE+8) //0x40010C08 
+#define GPIOC_IDR_Addr    (GPIOC_BASE+8) //0x40011008 
+#define GPIOD_IDR_Addr    (GPIOD_BASE+8) //0x40011408 
+#define GPIOE_IDR_Addr    (GPIOE_BASE+8) //0x40011808 
+#define GPIOF_IDR_Addr    (GPIOF_BASE+8) //0x40011A08 
+#define GPIOG_IDR_Addr    (GPIOG_BASE+8) //0x40011E08 
  
-#define PAout(n)   BIT_ADDR(GPIOA_ODR_Addr,n)  
-#define PAin(n)    BIT_ADDR(GPIOA_IDR_Addr,n)  
+//IO口操作,只对单一的IO口!
+//确保n的值小于16!
+#define PAout(n)   BIT_ADDR(GPIOA_ODR_Addr,n)  //输出 
+#define PAin(n)    BIT_ADDR(GPIOA_IDR_Addr,n)  //输入 
 
-#define PBout(n)   BIT_ADDR(GPIOB_ODR_Addr,n)  
-#define PBin(n)    BIT_ADDR(GPIOB_IDR_Addr,n)  
+#define PBout(n)   BIT_ADDR(GPIOB_ODR_Addr,n)  //输出 
+#define PBin(n)    BIT_ADDR(GPIOB_IDR_Addr,n)  //输入 
 
-#define PCout(n)   BIT_ADDR(GPIOC_ODR_Addr,n)  
-#define PCin(n)    BIT_ADDR(GPIOC_IDR_Addr,n)  
+#define PCout(n)   BIT_ADDR(GPIOC_ODR_Addr,n)  //输出 
+#define PCin(n)    BIT_ADDR(GPIOC_IDR_Addr,n)  //输入 
 
-#define PDout(n)   BIT_ADDR(GPIOD_ODR_Addr,n)  
-#define PDin(n)    BIT_ADDR(GPIOD_IDR_Addr,n)  
+#define PDout(n)   BIT_ADDR(GPIOD_ODR_Addr,n)  //输出 
+#define PDin(n)    BIT_ADDR(GPIOD_IDR_Addr,n)  //输入 
 
-#define PEout(n)   BIT_ADDR(GPIOE_ODR_Addr,n)  
-#define PEin(n)    BIT_ADDR(GPIOE_IDR_Addr,n)  
+#define PEout(n)   BIT_ADDR(GPIOE_ODR_Addr,n)  //输出 
+#define PEin(n)    BIT_ADDR(GPIOE_IDR_Addr,n)  //输入
 
-#define PFout(n)   BIT_ADDR(GPIOF_ODR_Addr,n)  
-#define PFin(n)    BIT_ADDR(GPIOF_IDR_Addr,n)  
+#define PFout(n)   BIT_ADDR(GPIOF_ODR_Addr,n)  //输出 
+#define PFin(n)    BIT_ADDR(GPIOF_IDR_Addr,n)  //输入
 
-#define PGout(n)   BIT_ADDR(GPIOG_ODR_Addr,n)  
-#define PGin(n)    BIT_ADDR(GPIOG_IDR_Addr,n)  
+#define PGout(n)   BIT_ADDR(GPIOG_ODR_Addr,n)  //输出 
+#define PGin(n)    BIT_ADDR(GPIOG_IDR_Addr,n)  //输入
 
-#define PHout(n)   BIT_ADDR(GPIOH_ODR_Addr,n)  
-#define PHin(n)    BIT_ADDR(GPIOH_IDR_Addr,n)  
+//以下为汇编函数
+void WFI_SET(void);		//执行WFI指令
+void INTX_DISABLE(void);//关闭所有中断
+void INTX_ENABLE(void);	//开启所有中断
+void MSR_MSP(u32 addr);	//设置堆栈地址
 
-#define PIout(n)   BIT_ADDR(GPIOI_ODR_Addr,n)  
-#define PIin(n)    BIT_ADDR(GPIOI_IDR_Addr,n)  
-/******************************************************************************\
-                             Typedef definitions
-\******************************************************************************/
-
-/******************************************************************************\
-                             Variables definitions
-\******************************************************************************/
-
-/******************************************************************************\
-                             Functions definitions
-\******************************************************************************/
-void WFI_SET(void);
-void INTX_DISABLE(void);
-void INTX_ENABLE(void);
-void MSR_MSP(uint32_t addr);
 #endif
-
-
-
-
-
-
-
-
-
-
-

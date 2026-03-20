@@ -1,0 +1,426 @@
+================================================================================
+        GlowMate 智能灯控系统设计与实现 —— 详细设计说明（论文用）
+================================================================================
+        基于 STM32F10x 的灯光与多媒体控制固件 — 完整技术文档
+================================================================================
+
+编写说明：本文档依据项目源码整理，供毕业设计/课程设计论文中的系统介绍、
+总体设计、模块实现、接口与协议等章节使用。格式为纯文本，便于复制与排版。
+
+
+================================================================================
+一、项目概述与功能清单
+================================================================================
+
+1.1 项目定位
+------------
+  本项目为一套面向智能台灯/氛围灯场景的嵌入式固件系统，命名为 GlowMate。
+  以 STM32F10x 系列 Cortex-M3 微控制器为核心，实现灯光控制、环境检测、
+  多媒体播放、串口协议通信及固件在线升级（IAP），采用 Bootloader + 
+  Application 双分区架构与事件驱动、协程调度的软件设计，便于扩展与维护。
+
+1.2 主要功能
+------------
+  （1）灯光控制
+      - 多种灯光模式：冷白、自然白、暖白、自动（光感）、彩色渐变、夜灯、
+        学习、RGB 自定义、关灯。
+      - 四档亮度档位：无/低/中/高，支持按键与滚轮（ADC）两种调节来源。
+      - 亮度 0～100 可调，颜色支持 RGB 及预定义色值（GRB 顺序，WS2812B）。
+      - 红外挥手开关：两路红外在 50ms～800ms 时间窗内先后触发视为挥手，
+        关灯时保存当前模式与档位，开灯时恢复。
+  （2）按键与事件
+      - 六路按键：模式、设置、播放、上、下、返回；支持短按、长按、长按保持等。
+      - 事件管理器：环形队列，多模块（按键、灯光、MP3、ASR 等）写入，
+        事件处理协程统一消费，映射为灯光/MP3 操作。
+  （3）MP3 播放
+      - 通过 USART3（9600bps）与串口 MP3 模块通信，实现播放、暂停、
+        上一曲、下一曲、音量（0～30）、循环开关。
+      - 音量支持 ADC 旋钮与 M 码设置，内部区分来源，查询时按当前来源返回。
+  （4）环境与时间
+      - DHT11 温湿度（单总线，PA8）；ADC 光感 1/2、电源检测、亮度/音量调节。
+      - RTC（LSE）：日期时间、闹钟（TIM3）、专注计时（TIM4）；闹钟到时向串口 2 发送 M8 S1 共 3 次、间隔 2 秒。
+  （5）串口 M 码协议
+      - 上位机/主控通过 USART1 或 USART2 发送 "M+数字" 文本指令，设备解析后执行并回复到接收端口。
+      - 支持版本、灯光、MP3、温湿度、RTC、闹钟、专注、亮度/电量、开关灯、RGB、状态灯等二十余条 M 码。
+  （6）固件升级（IAP）
+      - 双分区：Bootloader 16KB，Application 40KB；升级信息存于固定 Flash 页。
+      - Application 设置升级标志并重启后，Bootloader 通过串口 1 以 Xmodem 协议接收新固件，
+        写入暂存区，校验后拷贝至 APP0 并跳转。
+
+
+================================================================================
+二、系统总体架构
+================================================================================
+
+2.1 双分区与 Flash 布局（upgrade_config.h）
+--------------------------------------------
+  - FLASH_BASE_ADDR               = 0x08000000
+  - FLASH_ONE_PAGE_SIZE           = 1024 字节
+  - BOOT_START_ADDRESS            = 0x08000000  （Bootloader 起始）
+  - BOOT_SIZE                     = 16*1024     （16KB）
+  - APP0_START_ADDRESS            = 0x08004000  （Application 起始）
+  - APP0_SIZE                     = 40*1024     （40KB）
+  - UPGRADE_INFO_ADDRESS          = 0x08000000 + 15*1024  （升级信息页，与 Boot 共用 16KB 内最后一页）
+  - UPGRADE_INFO_SIZE             = 1024
+
+  升级信息结构体 upgrade_info_t（与 Bootloader 共用）：
+    - magic          (0xABCDEF00)
+    - upgrade_flag   (0x12345678 需升级 / 0x87654321 不需升级)
+    - version        应用固件版本号
+    - crc32          可选 CRC32
+    - boot_version   Bootloader 版本（由 Boot 写入）
+    - reserved[251]  保留，总大小 1024 字节
+
+  Application 工程需设置：IROM1 起始 0x08004000，大小 0xA000；向量表偏移
+  VECT_TAB_OFFSET = 0x4000（在 system_stm32f10x.c 中）。
+
+2.2 启动流程简述
+----------------
+  （1）上电后从 0x08000000 执行 Bootloader。
+  （2）Bootloader 读取升级信息页：若 upgrade_flag == 需升级 或 APP0 区无效，
+       则进入 Xmodem 接收流程；否则延迟后跳转到 APP0（0x08004000）执行 Application。
+  （3）Application 的 main() 中：SysTick_Init(72)、NVIC_PriorityGroup_2、
+       driver_init()、app_init()、thread_run()，进入协程调度，不再返回。
+
+2.3 软件分层与目录对应
+----------------------
+  - 硬件抽象层：library/（STM32F10x 标准外设库）
+  - 驱动层：     project/application/drivers/
+        drv_flash, drv_comm, drv_key, drv_adc, drv_rgb, drv_dht11, drv_rtc,
+        drv_input, drv_output, drv_timer, driver.c/h（总入口）
+  - 插件层：     project/application/plugins/
+        plugin_led（状态灯/模式灯）, plugin_rgb（WS2812B）, plugin_mp3
+  - 服务层：     project/application/services/
+        svc_key（按键扫描与事件上报）
+  - 应用层：     project/application/app/
+        app_light, app_key, app_mp3, app_periph, app_event_process, mcode_command, app.c/h
+  - 中间件：     components/middleware/event/（event_manager）
+                components/system/protothreads/（thread 协程）
+  - 主入口：     project/application/main/main.c, system.c, sys.c
+
+
+================================================================================
+三、硬件资源与引脚分配（依据驱动代码）
+================================================================================
+
+3.1 MCU 与时钟
+--------------
+  - 型号：STM32F10x（Cortex-M3）
+  - 系统时钟：72MHz（HSE + PLL）
+  - NVIC 优先级分组：2（2 位抢占，2 位响应）
+  - SysTick：1ms 周期中断，用于延时与协程 tick
+
+3.2 ADC（drv_adc.c）
+--------------------
+  - ADC1，PCLK2/6，多通道扫描。
+  - 通道与引脚：
+      ADC_ID_POWER_DETECT    -> PA0   (ADC_Channel_0)  电源检测
+      ADC_ID_VOLUME_ADJUST   -> PA4   (ADC_Channel_4)  音量调节
+      ADC_ID_LIGHT_ADJUST    -> PA5   (ADC_Channel_5)  亮度调节滚轮
+      ADC_ID_LIGHT_SENSOR_1  -> PB0   (ADC_Channel_8)  光感 1
+      ADC_ID_LIGHT_SENSOR_2  -> PB1   (ADC_Channel_9)  光感 2
+  - 接口：drv_adc_init()；drv_adc_get_value(uint8_t id)，返回 0～4095。
+
+3.3 按键（drv_key.h / drv_key.c）
+---------------------------------
+  - 按键 ID 定义：POWER_KEY(0), MODE_KEY(1), SETTING_KEY(2), UP_KEY(3), DOWN_KEY(4),
+                  LEFT_KEY(5), RIGHT_KEY(6), BACK_KEY(7), ENTER_KEY(8), ESC_KEY(9),
+                  START_KEY(10), STOP_KEY(11), PLAY_KEY(12)。
+  - 本工程实际使用引脚（见 drv_key.c 宏定义）：
+      KEY_MODE     -> PA11
+      KEY_SETTING  -> PA12
+      KEY_PLAY     -> PB13
+      KEY_UP       -> PB14
+      KEY_DOWN     -> PB15
+  - 输入模式：GPIO_Mode_IPU（上拉输入）。
+  - 接口：drv_key_init()；drv_key_read(uint8_t id)，返回 0/1。
+
+3.4 输入（挥手/红外）（drv_input.c）
+------------------------------------
+  - INPUT_ID_MW_DETECT  -> PB12  挥手检测
+  - INPUT_ID_IR_DETECT_1 -> PA6  红外 1
+  - INPUT_ID_IR_DETECT_2 -> PA7  红外 2
+  - 模式：GPIO_Mode_IN_FLOATING。
+  - 接口：drv_input_init()；drv_input_get_value(uint8_t id)。
+
+3.5 输出（drv_output.c）
+-----------------------
+  - OUTPUT_ID_LED         -> PC13  心跳 LED
+  - OUTPUT_ID_STATE_LED_R -> PA15  状态灯红（需关闭 JTAG 释放 PA15/PB3/PB4）
+  - OUTPUT_ID_STATE_LED_G -> PB3   状态灯绿
+  - OUTPUT_ID_STATE_LED_B -> PB4   状态灯蓝
+  - OUTPUT_ID_MODE_LED_R  -> PB5   模式灯红
+  - OUTPUT_ID_MODE_LED_G  -> PB6   模式灯绿
+  - OUTPUT_ID_MODE_LED_B  -> PB7   模式灯蓝
+  - 接口：drv_output_init()；drv_output_set_value(uint8_t id, uint8_t value)。
+
+3.6 RGB 灯带 WS2812B（drv_rgb.c）
+---------------------------------
+  - 数据输出：PA1，TIM2_CH2（PWM）+ DMA，模拟 WS2812B 时序。
+  - 灯珠数量：DRV_RGB_LED_NUM = 8；每珠 24 位（GRB），DRV_RGB_DATA_SIZE = 24。
+  - 时序：周期 90 计数，0 码高电平约 0.416μs（30），1 码约 0.833μs（60）。
+  - 全局缓冲区：drv_rgb_value[24*8]；plugin_rgb 层写入，drv_rgb 层 DMA 刷新。
+
+3.7 通信（drv_comm）
+-------------------
+  - USART1：115200，调试/升级/M 码接收，可回显并 process_m_code(DRV_USART_ID_1, ...)。
+  - USART2：115200，语音通信/M 码，process_m_code(DRV_USART_ID_2, ...)。
+  - USART3：9600，MP3 模块，无接收回调。
+  - printf 重定向：fputc() 输出到 s_printf_usart_id 指定串口（默认 USART1）。
+
+3.8 DHT11（drv_dht11.c）
+------------------------
+  - 数据引脚：PA8，单总线；推挽输出/浮空输入切换，时序 delay_ms/delay_us。
+  - 接口：drv_dht11_init()（返回 0 存在/1 不存在）；drv_dht11_read_data(&temp, &humi)。
+
+3.9 RTC（drv_rtc.c）
+--------------------
+  - LSE 时钟，备份域；首次上电初始化 RTC 并写入 rtc_time[]，否则仅同步。
+  - rtc_time[7]：年、月、日、星期、时、分、秒。
+  - 接口：drv_rtc_init()；drv_rtc_set_time()；drv_rtc_read_time(uint16_t *buf)。
+
+3.10 定时器（drv_timer）
+------------------------
+  - TIMER_ID_3：闹钟，时基 1s（7200 预分频、10000 周期），到时后由 drv_timer_alarm_poll() 每 2 秒向串口 2 发 M8 S1，共 3 次。
+  - TIMER_ID_4：专注计时。
+  - 接口：drv_timer3_init/4_init；drv_timer_start/pause/reset；drv_timer_set_alarm_data/get_alarm_data；
+          drv_timer_alarm_poll()（主任务每秒调用）；drv_timer_get_focus_time()。
+
+3.11 Flash（drv_flash）
+-----------------------
+  - 片内 Flash 擦除页、读写；用于升级信息与 IAP 写入 APP 区。
+  - 接口：drv_flash_init()；drv_flash_erase(addr, size)；drv_flash_read/write()。
+
+
+================================================================================
+四、应用层模块详解
+================================================================================
+
+4.1 灯光应用（app_light.c / app_light.h）
+-----------------------------------------
+  数据结构：
+    - TE_APP_LIGHT_LEVEL：APP_LIGHT_LEVEL_NONE/LOW/MID/HIGH/MAX
+    - TE_APP_LIGHT_MODE：冷白、自然白、暖白、自动、彩色、夜灯、学习、RGB、关、MAX
+    - TS_APP_LIGHT_DATA：mode, level, brightness, color；全局 s_light_data
+
+  关键宏：
+    - LIGHT_BRIGHTNESS_MAX = 100；ADC_VALUE_MAX = 4095
+    - ADC_LIGHT_CHANGE_THRESHOLD = 100（滚轮 ADC 变化超过此值才上报亮度事件）
+    - WAVE_DETECT_MIN_TICKS = 10（约 50ms），WAVE_DETECT_TIMEOUT_TICKS = 80（约 800ms）
+
+  接口（部分）：
+    - app_light_init()：初始化 RGB 插件、初始颜色，创建灯光协程。
+    - app_light_set()：根据当前 mode/level 设置灯带颜色与亮度（含自动光感映射）。
+    - app_light_adjust()：读亮度滚轮 ADC，映射 0～100，超过阈值则 event_manager_write(EVENT_MODULE_LIGHT, ...)。
+    - app_light_switch()：挥手检测状态机，两路红外在 [MIN, TIMEOUT] 内先后触发则切换关灯/开灯（保存恢复 mode/level）。
+    - app_light_set_mode/level/brightness/color，app_light_get_*；app_light_set_color_state(1 渐变/0 静态)；
+      app_light_set_adjust_brightness_status(0 按键/1 滚轮)。
+
+  协程：app_light_task，每 10ms 执行一次 app_light_set、app_light_adjust、app_light_switch。
+
+4.2 按键应用（app_key.c）
+-------------------------
+  - 注册六键配置表 s_key_tab（MODE_KEY, SETTING_KEY, PLAY_KEY, UP_KEY, DOWN_KEY, BACK_KEY），
+    短按 50ms、长按 1000ms、长按保持 10000ms，回调中 event_manager_write(EVENT_MODULE_KEY, evt, key_id, ...)。
+  - app_key_init() 调用 svc_key_init(s_key_tab, 6)。
+
+4.3 按键服务（svc_key.c / svc_key.h）
+--------------------------------------
+  - 扫描周期 KEY_SCAN_TICK_MS = 10ms；事件类型 TE_KEY_EVT：短按/长按/长按保持/多击等。
+  - TS_KEY_CFG：key_id, shortPressMS, longPressMS, longHoldMS, multipleClickMs, longKeepTrigMs, 回调 cb。
+  - svc_key_init(cfg_array, num) 注册；在驱动协程或定时器中周期调用 svc_key_scan()（或类似扫描入口）驱动扫描与回调。
+
+4.4 事件处理（app_event_process.c）
+-----------------------------------
+  - event_manager_init()；创建 app_event_process_task，每 10ms 执行 event_manager_read()，若有事件则 app_event_process_handler(&event)。
+  - 处理逻辑（仅响应 KEY_PRESS_SHORT_DOWN）：
+      MODE_KEY     -> mode 循环加一，跳过 OFF（关灯仅挥手进入）
+      SETTING_KEY  -> 按键调亮度，level++，到 MAX 回 NONE
+      BACK_KEY     -> level--，到 NONE 回 MAX
+      PLAY_KEY     -> 播放/暂停切换
+      UP_KEY       -> 下一曲；DOWN_KEY -> 上一曲
+      EVENT_MODULE_MP3   -> app_mp3_set_volume_from_adc(param)
+      EVENT_MODULE_LIGHT -> app_light_set_brightness(param)，并设滚轮调亮度
+
+4.5 MP3 应用（app_mp3.c）
+-------------------------
+  - 协程 app_mp3_task 每 100ms 调用 app_mp3_adjust_volume()（根据 ADC 调节音量并可选上报事件）。
+  - 音量来源：VOLUME_SOURCE_ADC / VOLUME_SOURCE_MCMD；M 码查询时按当前来源返回对应变量。
+
+4.6 外设状态（app_periph.c）
+----------------------------
+  - 协程周期读取 DHT11、光感 ADC、电源 ADC 等，计算亮度/电量百分比，根据充电与电量控制状态灯颜色（如充电>50% 绿色，电量<10% 红色），并可选 printf 调试。
+
+4.7 M 码指令（mcode_command.c / mcode_command.h）
+--------------------------------------------------
+  入口：process_m_code(port_id, data, size)；根据 "M数字" 分发到 process_m1～process_m99。
+
+  M 码列表（简要）：
+    M1    - 版本：回复 "M1 A<APP版本> B<Boot版本>\r\n"
+    M2    - 灯光：A 模式 B 档位 C 颜色；可只读或设置后回复当前 A B C
+    M3    - MP3：A=1 播放 2 暂停 3 上一曲 4 下一曲 5 循环开 6 循环关 7～10 音量档
+    M4    - 温湿度：回复 "M4 A<temp> B<humi>\r\n"
+    M5    - RTC 日期：A 月 B 日
+    M6    - RTC 时间：A 时 B 分
+    M7    - 闹钟状态：A=1 启动 2 暂停 3 复位
+    M8    - 闹钟时间：A 时 B 分 C 秒，可设置并回复当前
+    M9    - 氛围灯状态：A=0 静态 1 渐变
+    M10   - 上位机虚拟键：A=1 模式 2 加档 3 播放 4 上 5 下 6 减档
+    M11   - 开关灯：A=0 关（保存 mode/level）A=1 开（恢复）
+    M12   - 音量：无 A 查询（返回 0～100%）；A=1 加 A=2 减
+    M13   - 专注：A=1 开始 2 暂停 3 复位
+    M14   - 专注时间：回复当前时/分/秒
+    M15   - 环境亮度：回复 0～100
+    M16   - 电量：回复 0～100
+    M17   - RTC 星期
+    M25   - RGB：R/G/B 浮点，设置灯带为 RGB 模式并写入颜色（GRB 顺序）
+    M26   - 状态灯/模式灯：A=1～6 开某通道 B=1～6 关某通道（1～3 状态灯 R/G/B，4～6 模式灯 R/G/B）
+    M99   - 预留
+
+  解析使用 mk_str_get_value_by_tag(data, size, 0, 'A', &val) 等；回复使用 mcode_reply(port_id, "Mx ...\r\n", ...)。
+
+4.8 主应用任务（app.c）
+-----------------------
+  - app_init() 依次：app_key_init、app_light_init、app_mp3_init、app_periph_init、app_event_process_init、upgrade_init，并 thread_create(app_task)。
+  - app_task：每 1 秒翻转心跳 LED、drv_timer_alarm_poll()、printf 调试（可选）。
+
+
+================================================================================
+五、事件管理器与协程
+================================================================================
+
+5.1 事件管理器（event_manager.c / event_manager.h）
+----------------------------------------------------
+  - 结构体 TS_EVENT_DATA：module（uint16_t）, type（uint16_t）, param（uint32_t）, data（void*）, data_size（uint32_t）。
+  - 队列长度 EVENT_QUEUE_SIZE = 32，底层 mk_queue 环形队列。
+  - 接口：event_manager_init()；event_manager_write(module, type, param, data, data_size)；
+          event_manager_read(TS_EVENT_DATA* event)；event_manager_is_empty()；event_manager_count()。
+  - 模块常量：EVENT_MODULE_KEY、EVENT_MODULE_ASR、EVENT_MODULE_MP3、EVENT_MODULE_LIGHT。
+
+5.2 协程（thread.c / thread.h）
+-------------------------------
+  - 基于 Protothreads（pt.h, pt-sem.h）；宏 thread_begin、thread_end、thread_sleep(ms)、thread_create(func)。
+  - 最大任务数 MAX_THREADS = 20；pt_timer_t 用于 thread_sleep；SysTick 中 thread_systick_handle() 递增 tick。
+  - 使用注意：仅在线程函数内使用 thread_xxx()；switch-case 中不能嵌入；循环变量建议 static。
+
+5.3 任务一览（Application）
+---------------------------
+  - driver_task      - 驱动层协程（可空循环或扩展）
+  - app_task         - 心跳 LED、闹钟轮询、调试
+  - app_light_task   - 灯光 set/adjust/switch，10ms
+  - app_event_process_task - 事件读取与分发，10ms
+  - app_mp3_task     - 音量调节，100ms
+  - app_periph_task  - 温湿度、ADC、状态灯，周期
+
+
+================================================================================
+六、插件层概要
+================================================================================
+
+6.1 plugin_led（状态灯/模式灯）
+-------------------------------
+  - TE_LED_ID：LED_ID_STATE、LED_ID_MODE；TE_LED_COLOR：红/绿/蓝/黄/紫/青/白/黑。
+  - plugin_led_init() 调用 drv_output_init() 并设两灯初始颜色。
+  - plugin_led_set_color(led_id, color) 根据 color 设置 drv_output_set_value(OUTPUT_ID_STATE_LED_R/G/B 或 MODE_*)。
+
+6.2 plugin_rgb（WS2812B 灯带）
+------------------------------
+  - 预定义颜色宏：PLUGIN_RGB_COLOR_COOL_WHITE、WARM_WHITE、WHITE、RED、GREEN、BLUE 等（GRB 顺序）。
+  - plugin_rgb_init() -> drv_rgb_init()；plugin_rgb_clear_all()；plugin_rgb_set_all_color(color)；
+    plugin_rgb_set_pixel_rgb(idx, g, r, b)；plugin_rgb_set_all_brightness(color, duty_cycle)；
+    plugin_rgb_gradient_all_color_node_nonblocking(step, delay_ms) 等。
+
+6.3 plugin_mp3
+--------------
+  - 通过 USART3 发送固定帧（如 0x7E 0xFF 0x06 0x0D... 播放）；plugin_mp3_play/pause/previous/next；
+    plugin_mp3_set_volume(0～30)、set_loop(0/1)；plugin_mp3_get_state() 等。
+
+
+================================================================================
+七、固件升级（IAP）流程
+================================================================================
+
+7.1 Application 侧
+-------------------
+  - 需要升级时：upgrade_set_upgrade_flag(version) 等写入升级信息页（upgrade_flag = 需升级），
+    再 upgrade_system_reset()（关中断、复位）或 NVIC_SystemReset()。
+  - upgrade_init() 在 app_init() 中调用，可注册升级检测或串口命令触发。
+
+7.2 Bootloader 侧
+-----------------
+  - 上电后读取 UPGRADE_INFO_ADDRESS 处 upgrade_info_t；若 magic 有效且 upgrade_flag == 需升级，
+    或 APP0 区无效（如 SP/PC 非法、全 0xFF），则进入升级模式。
+  - 升级模式：串口 1 发送 'C' 等 Xmodem 握手；接收 128 字节包，校验，按页写入 APP1 暂存区；
+    收完后校验 APP 有效性，擦除 APP0 并拷贝 APP1 -> APP0，清除升级标志，跳转 APP0。
+  - 跳转前：upgrade_deinit_periph()（关闭 USART/GPIO）；设置栈顶 MSP、PC 为 APP0 复位向量。
+
+7.3 配置与版本
+--------------
+  - project_config.h：APP_FIRMWARE_VERSION、APP_FIRMWARE_VERSION_STR（如 "0.1.1"），供 M1 与升级显示。
+  - Bootloader 版本由 Boot 在升级信息中写入，Application 可通过 upgrade_get_boot_version_str() 等读取。
+
+
+================================================================================
+八、关键配置文件与常量
+================================================================================
+
+8.1 project_config.h
+--------------------
+  - APP_FIRMWARE_VERSION      （如 0x00010100 表示 v1.0.0）
+  - APP_FIRMWARE_VERSION_STR  （如 "0.1.1"）
+
+8.2 upgrade_config.h
+--------------------
+  - 分区地址与大小、升级信息页、UPGRADE_FLAG_NEED_UPGRADE/NO_UPGRADE、UPGRADE_MAGIC；
+  - upgrade_info_t 结构体。
+
+8.3 驱动/插件头文件
+-------------------
+  - 各 drv_*.h、plugin_*.h 中枚举 ID、宏、函数声明；具体引脚与通道以 .c 中宏定义为准。
+
+
+================================================================================
+九、工程与编译
+================================================================================
+
+9.1 目录结构（简要）
+--------------------
+  - project/application/    应用工程源码；keil_project/ 为 Keil 工程（不参与“除 keil_project 外”的文档/脚本）。
+  - project/bootloader/     引导工程源码。
+  - components/             中间件与公共组件（event、mk_queue、thread、protothreads、freertos 等）。
+  - library/                STM32F10x 标准外设库。
+  - tools/                  固件升级使用说明等。
+
+9.2 Application 编译要点
+-------------------------
+  - IROM1 Start: 0x08004000，Size: 0xA000（40KB）。
+  - 向量表偏移：VECT_TAB_OFFSET = 0x4000（system_stm32f10x.c）。
+
+9.3 Bootloader 编译要点
+------------------------
+  - IROM1 Start: 0x08000000，Size: 0x4000（16KB）。烧录到 0x08000000。
+
+
+================================================================================
+十、小结与论文使用建议
+================================================================================
+
+  本系统在 STM32F10x 上实现了完整的智能灯控与多媒体控制逻辑，具备：
+  - 清晰的双分区 IAP 与 Flash 布局；
+  - 分层驱动（drv_*）、插件（plugin_*）、服务（svc_key）、应用（app_*）与事件驱动、协程调度；
+  - 丰富的 M 码串口协议便于上位机/主控集成；
+  - 灯光模式与挥手检测、按键与事件映射、MP3、RTC/闹钟/专注、环境检测等完整功能。
+
+  论文撰写时可结合上述章节组织：
+  - “系统总体设计”对应第二节、第三节；
+  - “软件架构与模块划分”对应第二节分层与第四节、第六节；
+  - “硬件资源与引脚分配”对应第三节；
+  - “关键算法与流程”（挥手检测、事件消费、升级流程）对应第四节、第七节；
+  - “通信协议”对应 M 码列表与格式；
+  - “数据结构与配置”对应第五节、第八节。
+
+  可根据学校要求增删小节、补充流程图与表格，并注明“依据 GlowMate 项目源码整理”。
+
+================================================================================
+                              文档结束
+================================================================================

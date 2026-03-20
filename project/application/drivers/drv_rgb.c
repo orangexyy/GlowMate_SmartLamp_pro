@@ -1,179 +1,142 @@
 /****************************************************************************\
-**  版    权 : 
-**  文件名称 :  
-**  功能描述 :  
-**  作    者 :  
-**  日    期 :  
+**  文件名称 :  drv_rgb.c
+**  功能描述 :  RGB 灯带驱动。TIM2+PWM+DMA 产生 WS2812B 时序，刷新灯珠颜色数据。
+**  作    者 :  -
+**  日    期 :  -
 **  版    本 :  V0.0.1
-**  变更记录 :  V0.0.1/
-                1 首次创建
 \****************************************************************************/
 
-/******************************************************************************\
-                                 Includes
-\******************************************************************************/
-#include <stm32f4xx.h>
+/****************************************************************************\
+                            Includes
+\****************************************************************************/
+#include "stm32f10x.h"
+#include "string.h"
 #include "drv_rgb.h"
-
-/******************************************************************************\
+#include "system.h"
+/****************************************************************************\
                             Macro definitions
-\******************************************************************************/
-#define RGB_CODE_1           130          // 1码的PWM比较值
-#define RGB_CODE_0           60          // 0码的PWM比较值
-#define RGB_DATA_BITS        32          // RGB数据位数
-#define RGB_REPEAT_COUNT     32          // RGB数据重复发送次数
-#define RGB_BUFFER_SIZE      1024        // LED缓冲区大小 (32*32=1024)
-/******************************************************************************\
-                             Typedef definitions
-\******************************************************************************/
+\****************************************************************************/
+// 灯珠数量配置
+#define DRV_RGB_LED_NUM         8                  // 总灯珠数量
+#define DRV_RGB_DATA_SIZE       24                 // 每个灯珠24位
+#define DRV_RGB_0_CODE          30        // 0码：高电平≈0.416μs（30/90*1.25μs，符合WS2812B 0码时序）
+#define DRV_RGB_1_CODE          60        // 1码：高电平≈0.833μs（60/90*1.25μs，符合WS2812B 1码时序）
+/****************************************************************************\
+                            Typedef definitions
+\****************************************************************************/
 
-/******************************************************************************\
-                             Variables definitions
-\******************************************************************************/
-uint16_t rgb_data_buffer[RGB_BUFFER_SIZE] = {0};  // LED数据缓冲区
-/******************************************************************************\
-                             Functions definitions
-\******************************************************************************/
+/****************************************************************************\
+                            Variables definitions
+\****************************************************************************/
+uint16_t drv_rgb_value[DRV_RGB_DATA_SIZE * DRV_RGB_LED_NUM];    // 灯珠数据：drv_rgb_value
+/****************************************************************************\
+                            Functions definitions
+\****************************************************************************/
 /**
- * \brief 初始化RGB
- * \return 无
+ * \brief RGB 驱动初始化：配置 TIM2 PWM、DMA 及 GPIO，用于 WS2812B 数据输出
  */
 void drv_rgb_init(void)
 {
-    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);      /*使能GPIOE时钟*/
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);       /*使能TIM1时钟*/
-    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_DMA2, ENABLE);                        /*使能DMA2时钟*/
-  
-    GPIO_PinAFConfig(GPIOA, GPIO_PinSource8, GPIO_AF_TIM1);   /*将GPIOA8重映射到TIM1的输出通道上*/
-      
-    GPIO_InitTypeDef GPIO_InitStructure;
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;               /*将引脚功能配置为复用*/
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_InitStructure.GPIO_OType=GPIO_OType_PP;               /*推挽输出*/
-    GPIO_InitStructure.GPIO_PuPd=GPIO_PuPd_UP;                 /*上拉*/
-    GPIO_Init(GPIOA, &GPIO_InitStructure);
-     
-    /* 定时器周期 : T =(arr + 1) * (PSC + 1) / Tck.   arr:周期值 PSC:预分频值  Tck: 系统时钟频率 */
-    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
-    TIM_TimeBaseStructure.TIM_Period = 210 - 1;                     /* T = (TIM_Period + 1)*(0+1)/168M  = 800kHz*/
-    TIM_TimeBaseStructure.TIM_Prescaler = 0;                        /* 0：不预分频 */
-    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;         /* 0：时钟分频因子设为1，不分频*/
-    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;     /*向上计数*/
-    TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;                /*重复计数值为0，不使用重复计数*/
-    TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);
-  
-    /* PWM1 Mode configuration: Channel1 */
-    TIM_OCInitTypeDef  TIM_OCInitStructure;
-    TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;                /*PWM1模式，计数值小于比较值输出高电平，大于输出低电平*/
-    TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;    /*使能输出通道*/
-    TIM_OCInitStructure.TIM_Pulse = 0;                               /*设置占空比为0， 1 ~ TIM_TimeBaseStructure.TIM_Period */
-    TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;        /*设置输出极性高电平有效*/
-    TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Disable; /*禁用互补输出通道*/
-    TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCNPolarity_High;      /*设置互补输出通道极性高电平有效*/
-    TIM_OCInitStructure.TIM_OCIdleState = TIM_OCNIdleState_Set;      /*设置空闲时输出高电平*/
-    TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCNIdleState_Reset;   /*设置互补通道空闲时输出低电平*/ 
-    TIM_OC1Init(TIM1, &TIM_OCInitStructure);                         /*将上述配置应用到定时器一的通道三上*/
-    TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);                /*使能通道三的输出比较寄存器的预装载功能*/
-  
-    TIM_Cmd(TIM1, ENABLE);                                           /*使能TIM1定时器*/
-    TIM_CtrlPWMOutputs(TIM1,ENABLE);                                 /*使能TIM1的PWM输出*/
-    
-    DMA_DeInit(DMA2_Stream6);                                                   /*对DMA2_Stream6进行默认值初始化*/
-    /* DMA2 Stream6 Config for PWM1 by TIM1_CH1*/
-    DMA_InitTypeDef DMA_InitStructure;
-    DMA_InitStructure.DMA_Channel = DMA_Channel_0;                              /*配置DMA通道，通道0*/
-    DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)&(TIM1->CCR1);         /*配置外设基地址：TIM1的CCR3寄存器*/
-    DMA_InitStructure.DMA_Memory0BaseAddr = (uint32_t)rgb_data_buffer;          /*配置源数据的基地址*/
-    DMA_InitStructure.DMA_DIR = DMA_DIR_MemoryToPeripheral;                     /*设置搬运方向：存储器到外设*/
-    DMA_InitStructure.DMA_BufferSize = RGB_BUFFER_SIZE;                                      /*设置传输数据的大小*/
-    DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;            /*外设基地址不自增*/
-    DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;                     /*源数据基地址自增*/
-    DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord; /*设置外设数据大小为半字(16bit)*/
-    DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;         /*设置存储器数据大小为半字(16bit)*/
-    DMA_InitStructure.DMA_Mode = DMA_Mode_Normal;                               /*设置DMA为普通模式*/
-    DMA_InitStructure.DMA_Priority = DMA_Priority_High;                         /*DMA优先级为高*/
-    DMA_InitStructure.DMA_FIFOMode = DMA_FIFOMode_Disable;                      /*禁用DMA的FIFO模式*/
-    DMA_InitStructure.DMA_FIFOThreshold = DMA_FIFOThreshold_Full;               /*设置DMA的FIFO阈值为满*/
-    DMA_InitStructure.DMA_MemoryBurst = DMA_MemoryBurst_Single;                 /*设置内存突发传输模式为单次传输*/
-    DMA_InitStructure.DMA_PeripheralBurst = DMA_PeripheralBurst_Single;         /*设置外设突发传输模式为单次传输*/
-  
-    DMA_Init(DMA2_Stream6, &DMA_InitStructure);                                 /*将上述配置应用到 DMA2_Stream6*/
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1,ENABLE);
 
-    TIM_DMACmd(TIM1, TIM_DMA_CC1, ENABLE);                                      /*将TIM1的DMA请求映射到通道三并使能*/
+    GPIO_InitTypeDef GPIO_InitStructure;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    TIM_InternalClockConfig(TIM2);
+
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStructure;
+    TIM_TimeBaseInitStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseInitStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInitStructure.TIM_Period = 90 - 1;        
+    TIM_TimeBaseInitStructure.TIM_Prescaler = 1 - 1;      
+    TIM_TimeBaseInitStructure.TIM_RepetitionCounter = 0;
+    TIM_TimeBaseInit(TIM2, &TIM_TimeBaseInitStructure);
+
+    /*配置TIM2输出比较通道一*/
+    TIM_OCInitTypeDef TIM_OCInitStructure;
+    TIM_OCStructInit(&TIM_OCInitStructure);
+    TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+    TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+    TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+    TIM_OCInitStructure.TIM_Pulse = 60;        
+    TIM_OC2Init(TIM2, &TIM_OCInitStructure);
+
+    TIM_DMACmd(TIM2, TIM_DMA_CC2, ENABLE);
+    TIM_OC2PreloadConfig(TIM2, TIM_OCPreload_Enable);
+    TIM_CtrlPWMOutputs(TIM2, ENABLE);
+
+    /*配置DMA1*/
+    DMA_InitTypeDef DMA_InitStructure;
+    DMA_InitStructure.DMA_PeripheralBaseAddr    = (uint32_t)&(TIM2->CCR2);              //输出比较寄存器：TIM2->CCR2
+    DMA_InitStructure.DMA_PeripheralDataSize    = DMA_PeripheralDataSize_HalfWord;      //外设数据宽度16bits
+    DMA_InitStructure.DMA_PeripheralInc         = DMA_PeripheralInc_Disable;            //外设地址不自增
+    DMA_InitStructure.DMA_MemoryBaseAddr        = (uint32_t)drv_rgb_value;              //灯珠数据：drv_rgb_value
+    DMA_InitStructure.DMA_MemoryDataSize        = DMA_MemoryDataSize_HalfWord;          //存储器数据宽度16bits
+    DMA_InitStructure.DMA_MemoryInc             = DMA_MemoryInc_Enable;                 //存储器地址自增
+    DMA_InitStructure.DMA_DIR                   = DMA_DIR_PeripheralDST;                //传输方向：存储器→外设
+    DMA_InitStructure.DMA_BufferSize            = DRV_RGB_DATA_SIZE;                    //初始值无意义，后续动态设置  
+    DMA_InitStructure.DMA_Mode                  = DMA_Mode_Normal;                      //非循环模式
+    DMA_InitStructure.DMA_M2M                   = DMA_M2M_Disable;                      //硬件触发（TIM2）
+    DMA_InitStructure.DMA_Priority              = DMA_Priority_Medium;                  //优先级中等
+    DMA_Init(DMA1_Channel7, &DMA_InitStructure);                                         //初始化DMA1通道1
+
+    DMA_Cmd(DMA1_Channel7, DISABLE);
+    TIM_Cmd(TIM2, DISABLE);
+
+    DMA_SetCurrDataCounter(DMA1_Channel7, (DRV_RGB_DATA_SIZE * DRV_RGB_LED_NUM));
+    drv_rgb_clear();
+    drv_rgb_rest();
+    DMA_Cmd(DMA1_Channel7, ENABLE);
+    TIM_Cmd(TIM2, ENABLE);
+    while(DMA_GetFlagStatus(DMA1_FLAG_TC7) != SET);
+    DMA_Cmd(DMA1_Channel7, DISABLE);
+    DMA_ClearFlag(DMA1_FLAG_TC7);
+    TIM_Cmd(TIM2, DISABLE);
+    drv_rgb_rest();
+
+    DMA_SetCurrDataCounter(DMA1_Channel7, DRV_RGB_DATA_SIZE);
+    drv_rgb_clear();
+    drv_rgb_rest();
+    DMA_Cmd(DMA1_Channel7,ENABLE);
+    TIM_Cmd(TIM2, ENABLE);
+    while(DMA_GetFlagStatus(DMA1_FLAG_TC7) != SET);
+    DMA_Cmd(DMA1_Channel7,DISABLE);
+    DMA_ClearFlag(DMA1_FLAG_TC7);
+    TIM_Cmd(TIM2, DISABLE);
+    drv_rgb_rest();
 }
 
-/**
- * \brief 将RGB数据编码到LED缓冲区
- * \param rgb_data: RGB颜色数据（32位）
- * \return 无
- */
-static void rgb_data_encode(uint32_t rgb_data)
+void drv_rgb_rest(void)
 {
-    uint16_t buffer_idx = 0;
-    uint16_t repeat_idx, bit_idx;
-    uint32_t bit_mask;
+    TIM_Cmd(TIM2,DISABLE);
+    GPIO_ResetBits(GPIOA,GPIO_Pin_0);
+    delay_ms(1);
+}
 
-    // 重复发送32次相同的RGB数据
-    for(repeat_idx = 0; repeat_idx < RGB_REPEAT_COUNT; repeat_idx++)
+void drv_rgb_clear(void)
+{
+    uint16_t i=0;
+    for(i=0;i < (DRV_RGB_DATA_SIZE * DRV_RGB_LED_NUM); i++)
     {
-        // 从最高位到最低位依次检查每一位
-        bit_mask = 0x80000000;
-        for(bit_idx = 0; bit_idx < RGB_DATA_BITS; bit_idx++)
-        {
-            // 检查当前位是否为1
-            if(rgb_data & bit_mask)
-            {
-                rgb_data_buffer[buffer_idx] = RGB_CODE_1;
-            }
-            else
-            {
-                rgb_data_buffer[buffer_idx] = RGB_CODE_0;
-            }
-            buffer_idx++;
-            bit_mask >>= 1;  // 右移检查下一位
-        }
+        drv_rgb_value[i] = DRV_RGB_0_CODE;
     }
 }
- 
-/**
- * \brief 通过DMA发送RGB数据
- * \return 无
- */
-static void rgb_dma_send(void)
+
+void drv_rgb_show(uint8_t num)
 {
-    DMA_SetCurrDataCounter(DMA2_Stream6, RGB_BUFFER_SIZE);         /*指定要传输的数据量*/
-    TIM_Cmd(TIM1, ENABLE);                                    /*启用TIM1定时器*/
-    TIM_DMACmd(TIM1, TIM_DMA_CC1, ENABLE);                    /*将TIM1的DMA请求映射到通道三并使能*/
-    DMA_Cmd(DMA2_Stream6, ENABLE);                            /*启用DMA2_Stream6，开始数据传输*/
-    while(!DMA_GetFlagStatus(DMA2_Stream6, DMA_FLAG_TCIF6));  /*等待DMA传输完成，使用循环检查DMA传输完成标志*/
-    DMA_Cmd(DMA2_Stream6, DISABLE);                           /*禁用DMA2流6，停止数据传输*/
-    DMA_ClearFlag(DMA2_Stream6, DMA_FLAG_TCIF6);              /*清除DMA传输完成标志*/
-    TIM_Cmd(TIM1, DISABLE); 
+    drv_rgb_rest();
+    DMA_SetCurrDataCounter(DMA1_Channel7, DRV_RGB_DATA_SIZE * (num+1));
+    DMA_Cmd(DMA1_Channel7, ENABLE);
+    TIM_Cmd(TIM2, ENABLE);
+    while (DMA_GetFlagStatus(DMA1_FLAG_TC7) != SET);
+    DMA_ClearFlag(DMA1_FLAG_TC7);
+    DMA_Cmd(DMA1_Channel7, DISABLE);
+    TIM_Cmd(TIM2, DISABLE);
+    drv_rgb_rest();
 }
-    
-/**
- * \brief 发送RGB颜色数据
- * \param rgb_data: RGB颜色数据（32位，格式：0xRRGGBBWW等）
- * \return 无
-*/
-void drv_rgb_send(uint32_t rgb_data)
-{
-    // 将RGB数据编码到缓冲区
-    rgb_data_encode(rgb_data);
-    
-    // 通过DMA发送数据
-    rgb_dma_send();
-}
-
-
-
-
-
-
-
-
-
-
-
 

@@ -1,24 +1,23 @@
 /****************************************************************************\
-**  版    权 : 
-**  文件名称 :  
-**  功能描述 :  
-**  作    者 :  
-**  日    期 :  
+**  文件名称 :  drv_dht11.c
+**  功能描述 :  DHT11 温湿度驱动。单总线时序、复位检测、温湿度数据读取。
+**  作    者 :  -
+**  日    期 :  -
 **  版    本 :  V0.0.1
-**  变更记录 :  V0.0.1/
-                1 首次创建
 \****************************************************************************/
 
 /******************************************************************************\
                                  Includes
 \******************************************************************************/
-#include "stm32f4xx.h"                  // Device header
+#include "stm32f10x.h"                  // Device header
 #include "drv_dht11.h"
 #include "system.h"
 /******************************************************************************\
                              Macro definitions
 \******************************************************************************/
-
+#define DHT11_PORT_CLOCK 	    RCC_APB2Periph_GPIOA
+#define DHT11_PORT 		    	GPIOA
+#define DHT11_PIN 			    GPIO_Pin_8
 /******************************************************************************\
                              Typedef definitions
 \******************************************************************************/
@@ -32,26 +31,25 @@
 \******************************************************************************/
 
 /**
- * @brief 初始化DHT11的IO口 DQ 同时检测DHT11的存在
- * @return 1:不存在
- * @return 0:存在    	 
+ * \brief 初始化 DHT11 的 IO 并检测 DHT11 是否存在
+ * \return 1 不存在，0 存在
  */
 uint8_t drv_dht11_init(void)
 {	 
- 	// GPIO_InitTypeDef  GPIO_InitStructure;	
- 	// RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);	 
- 	// GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;				 
- 	// GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; 		
- 	// GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
- 	// GPIO_Init(GPIOA, &GPIO_InitStructure);			
- 	// GPIO_SetBits(GPIOA,GPIO_Pin_12);			
+ 	GPIO_InitTypeDef  GPIO_InitStructure;	
+ 	RCC_APB2PeriphClockCmd(DHT11_PORT_CLOCK, ENABLE);	 
+ 	GPIO_InitStructure.GPIO_Pin = DHT11_PIN;				 
+ 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; 		
+ 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+ 	GPIO_Init(DHT11_PORT, &GPIO_InitStructure);			
+ 	GPIO_SetBits(DHT11_PORT, DHT11_PIN);			
 			    
-	// drv_dht11_rst();
-	// return drv_dht11_check();
+	drv_dht11_rst();
+	return drv_dht11_check();
 } 
       
 /**
- * @brief 复位DHT11
+ * \brief 复位 DHT11（拉低再拉高 DQ）
  */
 void drv_dht11_rst(void)	   
 {                 

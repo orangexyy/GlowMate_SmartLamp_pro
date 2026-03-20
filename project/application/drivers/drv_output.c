@@ -1,24 +1,47 @@
 /****************************************************************************\
-**  版    权 : 
-**  文件名称 :  
-**  功能描述 :  
-**  作    者 :  
-**  日    期 :  
+**  文件名称 :  drv_output.c
+**  功能描述 :  输出驱动。GPIO 控制心跳 LED、状态灯 RGB、模式灯 RGB 的初始化与电平设置。
+**  作    者 :  -
+**  日    期 :  -
 **  版    本 :  V0.0.1
-**  变更记录 :  V0.0.1/
-                1 首次创建
 \****************************************************************************/
 
 /******************************************************************************\
                                  Includes
 \******************************************************************************/
 #include <stdio.h>
-#include "stm32f4xx.h"
+#include "stm32f10x.h"                  // Device header
 #include "drv_output.h"
 /******************************************************************************\
                              Macro definitions
 \******************************************************************************/
+#define OUTPUT_LED_PORT_CLOCK 	            RCC_APB2Periph_GPIOC
+#define OUTPUT_LED_PORT 		            GPIOC
+#define OUTPUT_LED_PIN 			            GPIO_Pin_13
 
+#define OUTPUT_STATE_LED_R_PORT_CLOCK 	    RCC_APB2Periph_GPIOA
+#define OUTPUT_STATE_LED_R_PORT 		    GPIOA
+#define OUTPUT_STATE_LED_R_PIN 			    GPIO_Pin_15
+
+#define OUTPUT_STATE_LED_G_PORT_CLOCK 	    RCC_APB2Periph_GPIOB
+#define OUTPUT_STATE_LED_G_PORT 		    GPIOB
+#define OUTPUT_STATE_LED_G_PIN 			    GPIO_Pin_3
+
+#define OUTPUT_STATE_LED_B_PORT_CLOCK 	    RCC_APB2Periph_GPIOB
+#define OUTPUT_STATE_LED_B_PORT 		    GPIOB
+#define OUTPUT_STATE_LED_B_PIN 			    GPIO_Pin_4
+
+#define OUTPUT_MODE_LED_R_PORT_CLOCK 	    RCC_APB2Periph_GPIOB
+#define OUTPUT_MODE_LED_R_PORT 		        GPIOB
+#define OUTPUT_MODE_LED_R_PIN 			    GPIO_Pin_5
+
+#define OUTPUT_MODE_LED_G_PORT_CLOCK 	    RCC_APB2Periph_GPIOB
+#define OUTPUT_MODE_LED_G_PORT 		        GPIOB
+#define OUTPUT_MODE_LED_G_PIN 			    GPIO_Pin_6
+
+#define OUTPUT_MODE_LED_B_PORT_CLOCK 	    RCC_APB2Periph_GPIOB
+#define OUTPUT_MODE_LED_B_PORT 		        GPIOB
+#define OUTPUT_MODE_LED_B_PIN 			    GPIO_Pin_7
 /******************************************************************************\
                              Typedef definitions
 \******************************************************************************/
@@ -31,31 +54,95 @@
                              Functions definitions
 \******************************************************************************/
 
+/**
+ * \brief 输出驱动初始化：配置心跳 LED、状态灯、模式灯 GPIO（释放 JTAG 占用引脚）
+ */
 void drv_output_init(void)
 {
-	GPIO_InitTypeDef  GPIO_InitStructure;
+    // 释放JTAG引脚PB3/PB4
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+    GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE);
 
-	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+	RCC_APB2PeriphClockCmd (OUTPUT_LED_PORT_CLOCK,ENABLE);
+	RCC_APB2PeriphClockCmd (OUTPUT_STATE_LED_R_PORT_CLOCK,ENABLE);
+	RCC_APB2PeriphClockCmd (OUTPUT_STATE_LED_G_PORT_CLOCK,ENABLE);
+	RCC_APB2PeriphClockCmd (OUTPUT_STATE_LED_B_PORT_CLOCK,ENABLE);
+	RCC_APB2PeriphClockCmd (OUTPUT_MODE_LED_R_PORT_CLOCK,ENABLE);
+	RCC_APB2PeriphClockCmd (OUTPUT_MODE_LED_G_PORT_CLOCK,ENABLE);
+	RCC_APB2PeriphClockCmd (OUTPUT_MODE_LED_B_PORT_CLOCK,ENABLE);
 
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_7;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
-	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-	GPIO_Init(GPIOA, &GPIO_InitStructure);
+    GPIO_InitTypeDef GPIO_InitStructure;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+
+    GPIO_InitStructure.GPIO_Pin  = OUTPUT_STATE_LED_R_PIN;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(OUTPUT_STATE_LED_R_PORT, &GPIO_InitStructure);
+
+    GPIO_InitStructure.GPIO_Pin  = OUTPUT_STATE_LED_G_PIN;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(OUTPUT_STATE_LED_G_PORT, &GPIO_InitStructure);
+
+    GPIO_InitStructure.GPIO_Pin  = OUTPUT_STATE_LED_B_PIN;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(OUTPUT_STATE_LED_B_PORT, &GPIO_InitStructure);
+
+    GPIO_InitStructure.GPIO_Pin  = OUTPUT_MODE_LED_R_PIN;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(OUTPUT_MODE_LED_R_PORT, &GPIO_InitStructure);
+
+    GPIO_InitStructure.GPIO_Pin  = OUTPUT_MODE_LED_G_PIN;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(OUTPUT_MODE_LED_G_PORT, &GPIO_InitStructure);
 	
-	GPIO_SetBits(GPIOA, GPIO_Pin_6 | GPIO_Pin_7);
+	GPIO_InitStructure.GPIO_Pin  = OUTPUT_MODE_LED_B_PIN;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(OUTPUT_MODE_LED_B_PORT, &GPIO_InitStructure);
+	
+	GPIO_InitStructure.GPIO_Pin  = OUTPUT_LED_PIN;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(OUTPUT_LED_PORT, &GPIO_InitStructure);
+
+	GPIO_ResetBits(OUTPUT_STATE_LED_R_PORT,OUTPUT_STATE_LED_R_PIN);
+	GPIO_ResetBits(OUTPUT_STATE_LED_G_PORT,OUTPUT_STATE_LED_G_PIN);
+	GPIO_ResetBits(OUTPUT_STATE_LED_B_PORT,OUTPUT_STATE_LED_B_PIN);
+	GPIO_ResetBits(OUTPUT_MODE_LED_R_PORT,OUTPUT_MODE_LED_R_PIN);
+	GPIO_ResetBits(OUTPUT_MODE_LED_G_PORT,OUTPUT_MODE_LED_G_PIN);
+	GPIO_ResetBits(OUTPUT_MODE_LED_B_PORT,OUTPUT_MODE_LED_B_PIN);
+	GPIO_ResetBits(OUTPUT_LED_PORT,OUTPUT_LED_PIN);
 }
 
+/**
+ * \brief 根据输出 ID 设置对应 GPIO 电平（心跳 LED、状态灯 RGB、模式灯 RGB）
+ * \param id 输出 ID，见 TE_DRV_OUTPUT_ID
+ * \param value 0 低电平，非 0 高电平
+ */
 void drv_output_set_value(uint8_t id, uint8_t value)
 {
-	switch (id)
-	{
-		case OUTPUT_ID_0:
-			GPIO_WriteBit(GPIOA,GPIO_Pin_6, value ? Bit_SET : Bit_RESET);
-			break;
-		case OUTPUT_ID_1:
-			GPIO_WriteBit(GPIOA,GPIO_Pin_7, value ? Bit_SET : Bit_RESET);
-			break;
-	}
+    switch (id)
+    {
+        case OUTPUT_ID_LED:
+            GPIO_WriteBit(OUTPUT_LED_PORT, OUTPUT_LED_PIN, value ? Bit_SET : Bit_RESET);
+            break;
+        case OUTPUT_ID_STATE_LED_R:
+            GPIO_WriteBit(OUTPUT_STATE_LED_R_PORT, OUTPUT_STATE_LED_R_PIN, value ? Bit_SET : Bit_RESET);
+            break;
+        case OUTPUT_ID_STATE_LED_G:
+            GPIO_WriteBit(OUTPUT_STATE_LED_G_PORT, OUTPUT_STATE_LED_G_PIN, value ? Bit_SET : Bit_RESET);
+            break;
+        case OUTPUT_ID_STATE_LED_B:
+            GPIO_WriteBit(OUTPUT_STATE_LED_B_PORT, OUTPUT_STATE_LED_B_PIN, value ? Bit_SET : Bit_RESET);
+            break;
+        case OUTPUT_ID_MODE_LED_R:
+            GPIO_WriteBit(OUTPUT_MODE_LED_R_PORT, OUTPUT_MODE_LED_R_PIN, value ? Bit_SET : Bit_RESET);
+            break;
+        case OUTPUT_ID_MODE_LED_G:
+            GPIO_WriteBit(OUTPUT_MODE_LED_G_PORT, OUTPUT_MODE_LED_G_PIN, value ? Bit_SET : Bit_RESET);
+            break;
+        case OUTPUT_ID_MODE_LED_B:
+            GPIO_WriteBit(OUTPUT_MODE_LED_B_PORT, OUTPUT_MODE_LED_B_PIN, value ? Bit_SET : Bit_RESET);
+            break;
+        default:
+            break;
+    }
 }
+

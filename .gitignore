@@ -1,0 +1,13 @@
+**/list/
+**/output/
+**/Listings/
+**/Objects/
+**/JLinkLog.txt
+**/JLinkSettings.ini
+*.uvguix.*
+*.uvoptx
+.vscode/
+**/Debug/
+**/settings/
+**/RTE/
+**/*.fw

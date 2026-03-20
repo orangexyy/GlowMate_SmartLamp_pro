@@ -25,8 +25,14 @@
 \****************************************************************************/
 typedef enum
 {
-	OUTPUT_ID_0,
-	OUTPUT_ID_1,
+    OUTPUT_ID_LED = 0,
+    OUTPUT_ID_STATE_LED_R = 1,
+    OUTPUT_ID_STATE_LED_G = 2,
+    OUTPUT_ID_STATE_LED_B = 3,
+    OUTPUT_ID_MODE_LED_R = 4,
+    OUTPUT_ID_MODE_LED_G = 5,
+    OUTPUT_ID_MODE_LED_B = 6,
+    OUTPUT_MAX
 } TE_OUTPUT_ID;
 /****************************************************************************\
                             Variables definitions
@@ -46,8 +52,7 @@ void drv_output_init(void);
  * \param value: 输出值
  * \return 无
  */
-void drv_output_set_value(TE_OUTPUT_ID id, uint8_t value);
-
+void drv_output_set_value(uint8_t id, uint8_t value);
 
 #endif
 /****************************************************************************\
