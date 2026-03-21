@@ -1,0 +1,326 @@
+================================================================================
+                    毕业设计论文（文本稿）
+        基于 STM32 的智能台灯控制系统设计与实现
+                    —— GlowMate_SmartLamp_pro 项目
+================================================================================
+
+【说明】
+  本文为纯文本格式（.txt），便于复制到 Word 后按学校模板设置字体、页眉页脚与目录。
+  技术内容依据本仓库源码整理，关键模块对应路径见各节脚注式说明。
+
+
+================================================================================
+                          摘要
+================================================================================
+
+  本文设计并实现了一套以 STM32F10x 微控制器为核心的智能台灯控制系统（项目名：
+GlowMate）。系统通过 WS2812B 可寻址 RGB 灯带实现多种光色与灯效，提供冷白、自然白、
+暖白、自控调光、氛围渐变、夜灯、学习、RGB 自定义等八种常用工作模式；亮度支持三档
+按键挡位（低/中/高）及电位器映射的无极调节（0～100%）。人机交互包括实体按键、
+串口 M 码协议（上位机/电脑端控制），并预留语音识别事件通道；传感方面集成温湿度
+（DHT11）、环境光（ADC）、双路红外对射（挥手开关灯逻辑）、电源与充电相关 ADC 采样，
+驱动层另配置微波/人体检测类数字输入引脚供功能扩展。系统扩展 MP3 播放模块（串口
+控制 SD 卡音频），支持按键、电位器及 M 码调节音量与切歌。软件采用 Bootloader 与
+Application 双分区架构，支持通过 USB 转串口连接上位机，在 Bootloader 下以 Xmodem
+协议完成固件在线升级（IAP）；供电侧结合锂电池与 USB 充电在硬件层面实现（固件通过
+ADC 反映电量与充电状态并驱动状态指示）。
+
+  应用软件采用分层结构：底层为标准外设库与自定义驱动（GPIO、ADC、USART、DMA、
+定时器、RTC、Flash 等），中层为插件（RGB、状态 LED、MP3）与按键服务，上层为灯光、
+事件、外设轮询等应用模块；任务调度基于 Protothreads 协程与 SysTick，事件通过环形
+队列在各模块间传递，结构清晰、便于维护与二次开发。
+
+  关键词：STM32；智能台灯；WS2812B；IAP；串口协议；嵌入式系统；RGB 调光
+
+
+================================================================================
+                      Abstract（可选）
+================================================================================
+
+  This thesis presents an STM32F10x-based smart desk lamp control system named GlowMate.
+It drives WS2812B addressable LEDs with multiple lighting modes, three discrete brightness
+levels plus potentiometer-based dimming, touch-style GPIO keys, and a host PC interface via
+textual M-code commands over USART. Environmental sensing includes DHT11, ambient light and
+battery-related ADC channels, and dual infrared inputs for wave gesture on/off. An MP3
+module is controlled over a dedicated UART. A dual-partition Bootloader supports in-application
+programming using Xmodem over the debug UART. The firmware uses a layered driver/plugin/app
+architecture with protothread-based scheduling and an event queue.
+
+  Keywords: STM32; smart lamp; WS2812B; IAP; serial protocol; embedded system
+
+
+================================================================================
+第一章  绪论
+================================================================================
+
+1.1 研究背景与意义
+------------------
+  学习、办公与居家场景中，照明质量直接影响视觉舒适度和效率。传统台灯多为单一色温
+与简单开关，难以适应阅读、夜间起夜、屏幕补光、氛围营造等差异化需求。将微控制器、
+多路传感器与可编程 RGB 光源结合，可在单一硬件平台上实现模式化照明、环境联动与
+多媒体扩展，具有明确的工程训练价值与应用前景。
+
+1.2 国内外研究现状（撰写时可补充文献）
+--------------------------------------
+  智能照明领域已有基于 Wi-Fi/BLE 的家用方案、基于 PID 或模糊控制的调光研究等。
+本设计侧重嵌入式单机方案：不依赖云端，响应实时，成本低，适合作为本科毕业设计
+的完整软硬件综合题目。
+
+1.3 本文主要工作
+----------------
+  （1）完成以 STM32F10x 为核心的硬件资源规划与固件驱动实现；
+  （2）实现八种灯光模式、挡位与无极亮度、挥手关灯/开灯状态机；
+  （3）实现 DHT11、光敏、电量与充电指示、RTC/闹钟/专注计时等外设应用逻辑；
+  （4）实现 MP3 模块串口协议封装与音量多源调节；
+  （5）实现 M 码串口命令集及双分区 IAP（Xmodem）升级流程；
+  （6）给出软件分层与模块说明，便于论文“系统设计与实现”章节展开。
+
+1.4 论文结构安排
+----------------
+  第二章介绍系统总体方案；第三章硬件设计；第四章软件设计与关键算法；第五章测试
+与总结展望。
+
+
+================================================================================
+第二章  系统总体方案设计
+================================================================================
+
+2.1 功能需求对照（与源码一致）
+------------------------------
+  灯光：
+    - 八种模式（枚举 TE_APP_LIGHT_MODE，见 app_light.h）：
+        冷白 COOL_WHITE、自然白 NORMAL_WHITE、暖白 WARM_WHITE、
+        自控 AUTO（按光敏 ADC 映射亮度）、氛围 COLOR（可静态/渐变）、
+        夜灯 NIGHT、学习 STUDY、RGB 自定义（含上位机 M25 设 RGB）、
+        另有关灯 OFF（挥手或 M11 等进入，按键切模式时跳过 OFF）。
+    - 亮度挡位：LOW/MID/HIGH 三档对应约 30%、60%、100%，NONE 为关闭输出；
+      电位器经 ADC_ID_LIGHT_ADJUST 映射 0～100，变化超阈值通过事件更新亮度。
+    - RGB 硬件为 WS2812B，单线时序由 TIM+DMA 驱动（drv_rgb.c / plugin_rgb.c）。
+
+  交互：
+    - 触摸/按键：MODE、SETTING、BACK、PLAY、UP、DOWN 等（app_key.c / drv_key.c），
+      短按事件经 event_manager 分发（app_event_process.c）。
+    - 语音：事件模块 EVENT_MODULE_ASR 已预留，USART2 可用于语音模组通信；
+      当前 app_event_process.c 中 ASR 分支为空，可在后续填入语义到 M 码或事件的映射。
+    - 电脑：USART1/USART2 接收文本指令，process_m_code() 解析 M1～M99（mcode_command.c）。
+
+  传感与外设：
+    - DHT11：温湿度（drv_dht11.c，app_periph.c 周期读取）。
+    - 光敏：ADC_ID_LIGHT_SENSOR_1，用于自控模式与环境亮度查询 M15。
+    - 红外对射：INPUT_ID_IR_DETECT_1/2，挥手检测状态机 app_light_switch()。
+    - 人体/微波：INPUT_ID_MW_DETECT（PB12）在 drv_input 中初始化可读，
+      当前应用层未绑定“人来灯亮”逻辑，论文可写为已预留扩展点。
+    - 电量/充电：ADC_ID_POWER_DETECT 与另一路 ADC（app_periph 中用于充电指示阈值）
+      驱动状态 LED 颜色（绿/红/白）。
+
+  多媒体：
+    - USART3 9600bps 与 MP3 模块通信（plugin_mp3.c），播放/暂停/上下曲/音量；
+      app_mp3.c 中电位器 ADC 调节音量并可上报事件。
+
+  升级：
+    - Application 通过 M99 置升级标志并复位；Bootloader 串口 1 Xmodem 收包写 Flash
+      （upgrade_manager.c，分区见 upgrade_config.h）。
+
+2.2 系统总体架构
+----------------
+  ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+  │  上位机/语音 │────│ USART1/2/3  │────│  STM32F10x  │
+  │  MP3 模块   │     │  DHT11/ADC  │     │  驱动+应用  │
+  └─────────────┘     │  红外/按键   │     └──────┬──────┘
+                      └──────────────┘            │
+                                                  ▼
+                                          WS2812B / 状态灯
+  软件分层：library（标准库）→ drivers → plugins & services → app → main+thread。
+
+2.3 开发环境与工具链
+--------------------
+  Keil MDK、STM32F10x 标准外设库；源码中 SysTick 72MHz、NVIC 分组 2（main.c）。
+  Bootloader 与 Application 分工程编译，烧录起始地址不同（见第四章）。
+
+
+================================================================================
+第三章  硬件设计
+================================================================================
+
+3.1 主控与时钟
+--------------
+  MCU：STM32F10x（Cortex-M3），系统时钟 72MHz。
+
+3.2 引脚与外设分配（依据 drv_*.c，与 docs/项目设计说明_论文用.txt 一致处不再赘述）
+--------------------------------------------------------------------------------
+  - ADC：PA0 电源检测；PA4 音量电位器；PA5 亮度电位器；PB0 光敏1；PB1 光敏2/充电相关采样。
+  - 按键：PA11 模式；PA12 设置；PB13 播放；PB14 上；PB15 下；BACK 等见 drv_key.c 表。
+  - 红外：PA6、PA7；微波/人体：PB12。
+  - WS2812B 数据线：PA1（TIM2_CH2 + DMA）。
+  - DHT11：PA8。
+  - USART1：PA9/PA10，调试、M 码、IAP；USART2：语音/M 码；USART3：MP3。
+  - 状态灯与模式灯：多路 GPIO（PA15/PB3/PB4/PB5/PB6/PB7 等，注意 JTAG 复用）。
+
+3.3 电源与电池
+--------------
+  锂电池供电、USB 充电为硬件电源方案；固件通过 ADC 估算电量并在低电量时红色指示、
+  高充电阈值绿色指示（app_periph.c）。具体分压电阻与充电 IC 以实际原理图为准写入
+  正式论文“硬件电路”小节。
+
+
+================================================================================
+第四章  软件系统设计
+================================================================================
+
+4.1 主程序流程
+--------------
+  main()：SysTick_Init(72) → NVIC_PriorityGroupConfig → driver_init() → app_init() →
+  thread_run() 进入协程调度（project/application/main/main.c）。
+  app_init() 顺序初始化按键、灯光、MP3、外设轮询、事件处理、升级模块，并创建
+  应用任务（project/application/app/app.c）。
+
+4.2 灯光控制模块
+----------------
+  app_light_task 每 10ms 调用：
+    - app_light_set()：按模式写 plugin_rgb 与 plugin_led（模式指示色）；
+      AUTO 模式将光敏 ADC 线性映射到 0～100 亮度。
+    - app_light_adjust()：电位器 ADC 防抖阈值后 event_manager_write(EVENT_MODULE_LIGHT)。
+    - app_light_switch()：双路红外边沿与时间窗状态机，切换 OFF 与保存的 mode/level。
+
+4.3 事件与按键
+--------------
+  svc_key 扫描生成短按/长按等事件，回调写入 EVENT_MODULE_KEY；app_event_process_task
+  消费事件：模式键循环模式（跳过 OFF）、SETTING/BACK 调节挡位、PLAY/UP/DOWN 控制 MP3，
+  EVENT_MODULE_LIGHT 设置亮度并标记为滚轮调节源（app_event_process.c）。
+
+4.4 串口 M 码协议（节选）
+-------------------------
+  帧格式：行文本，含 “M数字” 与标签 A/B/C… 参数；process_m_code 按序号分发。
+  示例：
+    M1  查询应用与 Boot 版本字符串；
+    M2  A 模式 B 挡位 C 颜色；
+    M3  MP3 子命令；
+    M4  温湿度；M15 环境亮度；M16 电量；M11 开关灯（保存/恢复状态）；
+    M25 R/G/B 设置 RGB 模式颜色（GRB 打包）；
+    M99 进入 IAP（置标志并复位）。
+  完整列表见 mcode_command.c 与仓库 docs/项目设计说明_论文用.txt。
+
+4.5 MP3 插件
+------------
+  固定 8 字节帧 0x7E 0xFF 0x06 … 0xEF 控制播放、暂停、切歌、音量（plugin_mp3.c）。
+
+4.6 IAP 与 Flash 布局
+---------------------
+  Bootloader 占 0x08000000 起 16KB；Application 起 0x08004000，40KB；升级信息页在
+  Boot 区末页（upgrade_config.h）。Application 编译需设置向量表偏移 0x4000。
+
+4.7 协程与实时性
+----------------
+  Protothreads 实现多任务协作；SysTick 提供 thread_sleep 时间基准。灯光与手势检测
+  10ms 周期，外设轮询 1s 周期，需在论文“实时性分析”中结合负载讨论。
+
+
+================================================================================
+第五章  关键算法说明
+================================================================================
+
+5.1 挥手开关灯判别
+------------------
+  状态机：空闲 → 等待另一路触发 → 若在 [WAVE_DETECT_MIN_TICKS, TIMEOUT] 内（约 50ms～
+  800ms，10ms 任务节拍）先后触发则翻转 OFF 与记忆状态；过短视为同时触发忽略，过长
+  超时复位（app_light.c）。
+
+5.2 亮度与挡位优先级
+--------------------
+  adjust_brightness_status：0 表示按键挡位决定 30/60/100；1 表示滚轮事件覆盖亮度。
+  自控模式 AUTO 内由光敏持续改写 brightness。
+
+5.3 WS2812B 数据编码
+--------------------
+  plugin_rgb 将每比特展开为 PWM 缓冲区，GRB 顺序与 WS2812B 一致；drv_rgb_show 触发
+  DMA 输出。
+
+
+================================================================================
+第六章  系统测试（撰写时填实测数据）
+================================================================================
+
+6.1 功能测试建议用例
+--------------------
+  - 八种模式切换与模式 LED 颜色是否一致；
+  - 三挡亮度与电位器无极调节；
+  - 挥手关灯/开灯与状态记忆；
+  - DHT11 读数、M4/M15/M16 与屏显一致性；
+  - MP3 播放、按键与 M3/M12；
+  - M99 升级全流程（Boot 提示、Xmodem 传包、重启后版本号）。
+
+6.2 稳定性测试
+--------------
+  长时间运行、连续模式切换、强环境光下自控模式、低电量报警等。
+
+
+================================================================================
+第七章  总结与展望
+================================================================================
+
+7.1 工作总结
+------------
+  本文完成了智能台灯控制系统的软硬件方案与固件实现，涵盖多模式 RGB 照明、传感器
+  融合、多媒体扩展与 IAP，代码分层与事件驱动结构完整。
+
+7.2 不足与展望
+--------------
+  （1）EVENT_MODULE_ASR 未实现具体语音指令解析，可与离线语音模组 AT 协议对接；
+  （2）MW_DETECT 未参与自动亮灯策略，可增加“人走延时灭灯”等策略；
+  （3）可增加低功耗待机、蓝牙/Wi-Fi 模块与手机 App；
+  （4）光感与电量 ADC 可做标定与滤波（如滑动平均）提升体验。
+
+7.3 心得体会
+------------
+  （由作者根据实际开发过程填写。）
+
+
+================================================================================
+参考文献（格式请按学校要求调整）
+================================================================================
+  [1] STMicroelectronics. RM0008 Reference manual for STM32F101xx and STM32F103xx.
+  [2] Worldsemi. WS2812B Intelligent control LED integrated light source datasheet.
+  [3] 项目仓库 GlowMate_SmartLamp_pro 源码（本地路径略）.
+  [4] XMODEM/YMODEM Protocol Reference（IAP 传输协议）.
+  （可补充：DHT11 手册、语音模组数据手册、相关期刊论文等。）
+
+
+================================================================================
+附录 A  源码模块索引（便于答辩与查重说明）
+================================================================================
+  project/application/main/main.c          主函数与调度入口
+  project/application/app/app_light.c/h    灯光模式、挡位、手势、电位器
+  project/application/app/app_event_process.c  事件消费与按键/MP3/亮度
+  project/application/app/mcode_command.c  M 码命令集
+  project/application/app/app_periph.c       温湿度、ADC、状态灯
+  project/application/app/app_mp3.c          MP3 应用层音量逻辑
+  project/application/plugins/plugin_rgb.c   WS2812B 高层接口
+  project/application/plugins/plugin_mp3.c   MP3 串口帧
+  project/application/drivers/drv_*.c      外设驱动
+  project/application/upgrade/upgrade_manager.c  应用侧升级入口
+  project/bootloader/                      Bootloader 与 IAP 实现
+  components/middleware/event/             事件队列
+  components/system/protothreads/        协程内核
+  project/application/config/project_config.h  固件版本号
+
+
+================================================================================
+附录 B  模式与枚举对照表（论文表格可由此排版）
+================================================================================
+  用户表述名称          源码枚举名              简要行为
+  ---------------------------------------------------------------------------
+  冷光灯               APP_LIGHT_MODE_COOL_WHITE    冷白色，挡位/无极亮度
+  自然白光灯           APP_LIGHT_MODE_NORMAL_WHITE  中性白
+  暖光灯               APP_LIGHT_MODE_WARM_WHITE    暖白色
+  自控灯               APP_LIGHT_MODE_AUTO          光感 ADC 自动亮度
+  氛围灯               APP_LIGHT_MODE_COLOR         渐变/静态可切换
+  夜灯                 APP_LIGHT_MODE_NIGHT         暖白+当前亮度策略
+  学习灯               APP_LIGHT_MODE_STUDY         暖白+当前亮度策略
+  电脑屏幕补光/RGB     APP_LIGHT_MODE_RGB           自定义颜色，M25 设 RGB
+  关灯                 APP_LIGHT_MODE_OFF           全灭，挥手或 M11 恢复
+
+
+================================================================================
+                              全文结束
+================================================================================
+（字数说明：正文可根据学校要求从本稿扩展——补充插图编号、公式、图表及更详细的测试结果。）
